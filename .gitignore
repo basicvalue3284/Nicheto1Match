@@ -1,4 +1,5 @@
 __pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 .venv/
@@ -6,10 +7,15 @@ __pycache__/
 venv/
 .env
 .env.local
-data/jobs/*.json
+data/
+backups/
+tools/
+solution-step-extractor/
 .DS_Store
 *.swp
 .idea/
 .vscode/
 *.egg-info/
 .pytest_cache/
+*.zip
+*.docx
