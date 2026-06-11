@@ -1,0 +1,6 @@
+{
+  "name": "Niche to Match",
+  "description": "An advanced scraper and niche categorization engine that helps content creators and businesses match web titles, keywords, and domain assets to target market niches using the Gemini API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
