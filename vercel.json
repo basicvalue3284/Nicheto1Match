@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/main.py": {
+      "excludeFiles": "{data/**,backups/**,tools/**,solution-step-extractor/**,__pycache__/**,**/__pycache__/**,*.pyc,.venv/**,.venv312/**,venv/**,.env,.env.*,*.zip,*.docx,*.png}"
+    }
+  }
+}

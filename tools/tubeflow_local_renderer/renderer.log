@@ -1,0 +1,66 @@
+[2026-05-24 18:09:11] Watching folder: /private/tmp/tubeflow_local_test/LosslessCut
+[2026-05-24 18:09:11] Audio folder: /private/tmp/tubeflow_local_test/Downloads
+[2026-05-24 18:09:11] Final output folder: /private/tmp/tubeflow_local_test/Ready
+[2026-05-24 18:09:11] Waiting for LosslessCut exports...
+[2026-05-24 18:09:11] Found video: how_to_enable_cloudflare_schema_validation.mp4
+[2026-05-24 18:09:12] Matched audio by name match: how_to_enable_cloudflare_schema_validation.mp3
+[2026-05-24 18:09:12] Starting FFmpeg render...
+[2026-05-24 18:09:12] Video: /private/tmp/tubeflow_local_test/LosslessCut/how_to_enable_cloudflare_schema_validation.mp4
+[2026-05-24 18:09:12] Audio: /private/tmp/tubeflow_local_test/Downloads/how_to_enable_cloudflare_schema_validation.mp3
+[2026-05-24 18:09:12] Output: /private/tmp/tubeflow_local_test/Ready/how_to_enable_cloudflare_schema_validation_FINAL.mp4
+[2026-05-24 18:09:14] Render complete.
+[2026-05-24 18:09:14] Final video ready: /private/tmp/tubeflow_local_test/Ready/how_to_enable_cloudflare_schema_validation_FINAL.mp4
+[2026-05-24 19:48:52] Watching folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/02_OBS_or_LosslessCut_Video
+[2026-05-24 19:48:52] Audio folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/01_Audio_1x
+[2026-05-24 19:48:52] Final output folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output
+[2026-05-24 19:48:52] Waiting for LosslessCut exports...
+[2026-05-24 21:21:30] Found video: how_to_create_a_canva_account.mov
+[2026-05-24 21:21:31] Matched audio by name match: how_to_create_a_canva_account.mp3
+[2026-05-24 21:21:31] Starting FFmpeg render...
+[2026-05-24 21:21:31] Video: /Users/chandanv/Desktop/TubeFlow_Local_Render/02_OBS_or_LosslessCut_Video/how_to_create_a_canva_account.mov
+[2026-05-24 21:21:31] Audio: /Users/chandanv/Desktop/TubeFlow_Local_Render/01_Audio_1x/how_to_create_a_canva_account.mp3
+[2026-05-24 21:21:31] Output: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output/how_to_create_a_canva_account_FINAL.mp4
+[2026-05-24 21:21:45] Render complete.
+[2026-05-24 21:21:45] Final video ready: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output/how_to_create_a_canva_account_FINAL.mp4
+[2026-06-01 09:29:30] Watching folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/02_OBS_or_LosslessCut_Video
+[2026-06-01 09:29:30] Audio folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/01_Audio_1x
+[2026-06-01 09:29:30] Final output folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output
+[2026-06-01 09:29:30] Waiting for video files...
+[2026-06-01 09:51:38] Found video: how_to_add_email_in_carrd.mp4
+[2026-06-01 09:51:39] Audio not found for how_to_add_email_in_carrd.mp4: no matching MP3 name found
+[2026-06-01 09:52:13] Watching folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/02_OBS_or_LosslessCut_Video
+[2026-06-01 09:52:13] Audio folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/01_Audio_1x
+[2026-06-01 09:52:13] Final output folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output
+[2026-06-01 09:52:13] Waiting for video files...
+[2026-06-01 09:52:25] Found video: how_to_add_email_in_carrd.mp4
+[2026-06-01 09:52:26] Matched audio by name match: how_to_add_email_in_carrd.mp3
+[2026-06-01 09:52:26] Starting FFmpeg render...
+[2026-06-01 09:52:26] Video: /Users/chandanv/Desktop/TubeFlow_Local_Render/02_OBS_or_LosslessCut_Video/how_to_add_email_in_carrd.mp4
+[2026-06-01 09:52:26] Audio: /Users/chandanv/Desktop/TubeFlow_Local_Render/01_Audio_1x/how_to_add_email_in_carrd.mp3
+[2026-06-01 09:52:26] Output: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output/how_to_add_email_in_carrd_FINAL.mp4
+[2026-06-01 09:52:35] Render complete.
+[2026-06-01 09:52:35] Final video ready: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output/how_to_add_email_in_carrd_FINAL.mp4
+[2026-06-01 14:53:43] Watching folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/02_OBS_or_LosslessCut_Video
+[2026-06-01 14:53:43] Audio folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/01_Audio_1x
+[2026-06-01 14:53:43] Final output folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output
+[2026-06-01 14:53:43] Waiting for video files...
+[2026-06-01 14:53:43] Found video: how_to_add_an_image_in_carrd.mp4
+[2026-06-01 14:53:44] Matched audio by name match: how_to_add_an_image_in_carrd.mp3
+[2026-06-01 14:53:44] Starting FFmpeg render...
+[2026-06-01 14:53:44] Video: /Users/chandanv/Desktop/TubeFlow_Local_Render/02_OBS_or_LosslessCut_Video/how_to_add_an_image_in_carrd.mp4
+[2026-06-01 14:53:44] Audio: /Users/chandanv/Desktop/TubeFlow_Local_Render/01_Audio_1x/how_to_add_an_image_in_carrd.mp3
+[2026-06-01 14:53:44] Output: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output/how_to_add_an_image_in_carrd_FINAL.mp4
+[2026-06-01 14:53:53] Render complete.
+[2026-06-01 14:53:53] Final video ready: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output/how_to_add_an_image_in_carrd_FINAL.mp4
+[2026-06-01 15:33:43] Watching folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/02_OBS_or_LosslessCut_Video
+[2026-06-01 15:33:43] Audio folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/01_Audio_1x
+[2026-06-01 15:33:43] Final output folder: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output
+[2026-06-01 15:33:43] Waiting for video files...
+[2026-06-01 15:35:22] Found video: how_to_add_an_image_in_carrd.mp4
+[2026-06-01 15:35:23] Matched audio by name match: how_to_add_an_image_in_carrd.mp3
+[2026-06-01 15:35:23] Starting FFmpeg render...
+[2026-06-01 15:35:23] Video: /Users/chandanv/Desktop/TubeFlow_Local_Render/02_OBS_or_LosslessCut_Video/how_to_add_an_image_in_carrd.mp4
+[2026-06-01 15:35:23] Audio: /Users/chandanv/Desktop/TubeFlow_Local_Render/01_Audio_1x/how_to_add_an_image_in_carrd.mp3
+[2026-06-01 15:35:23] Output: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output/how_to_add_an_image_in_carrd_FINAL.mp4
+[2026-06-01 15:35:32] Render complete.
+[2026-06-01 15:35:32] Final video ready: /Users/chandanv/Desktop/TubeFlow_Local_Render/03_Final_Output/how_to_add_an_image_in_carrd_FINAL.mp4

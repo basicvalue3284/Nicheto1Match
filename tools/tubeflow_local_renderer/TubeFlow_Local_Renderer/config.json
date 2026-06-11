@@ -1,0 +1,18 @@
+{
+  "speed_multiplier": 1.5,
+  "downloads_folder": "%USERPROFILE%\\Downloads",
+  "video_watch_folder": "%USERPROFILE%\\Videos\\LosslessCut",
+  "output_folder": "%USERPROFILE%\\Desktop\\Ready_For_Google_Drive",
+  "processed_folder": "%USERPROFILE%\\Videos\\LosslessCut\\Processed_By_TubeFlow",
+  "failed_folder": "%USERPROFILE%\\Videos\\LosslessCut\\Needs_Admin_Help",
+  "strict_name_match": true,
+  "fallback_to_newest_audio_within_minutes": 3,
+  "output_fps": 30,
+  "output_width": 1920,
+  "output_height": 1080,
+  "video_crf": 18,
+  "video_preset": "veryfast",
+  "audio_bitrate": "96k",
+  "audio_sample_rate": 44100,
+  "audio_channels": "mono"
+}

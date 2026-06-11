@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}Title Scraper{% endblock %}
+{% block content %}
+
+<div class="scraper-page">
+  <aside class="scraper-side">
+    <form action="/scraper/jobs" method="post" enctype="multipart/form-data" id="scraperForm">
+      <section class="side-section">
+        <h2>Data Input</h2>
+        <label>Upload Titles</label>
+        <div class="file-picker">
+          <input type="file" name="file" accept=".txt,.csv,.tsv,.xlsx,.xls">
+          <span>TXT, CSV, XLSX</span>
+        </div>
+        <label>Or Paste Titles</label>
+        <textarea name="pasted" rows="6" placeholder="One title per line"></textarea>
+        <label>Run name</label>
+        <input type="text" name="name" placeholder="Auto-filled if blank">
+        <button class="primary-btn full" type="submit" name="run_now" value="yes" onclick="return guardRapidKey()">Start Titles Scrape & Subs Data</button>
+        <button class="mini-btn full" type="submit" name="run_now" value="no">Create Without Running</button>
+      </section>
+    </form>
+  </aside>
+
+  <main class="scraper-main">
+    <header class="scraper-head">
+      <div>
+        <p>Step 3</p>
+        <h1>Step 3 : Title Scraper (1 Match Found)</h1>
+      </div>
+      <div class="scraper-actions">
+        <button class="icon-btn" type="button" onclick="openSettings()">⚙</button>
+        <a href="/" class="mini-link">Keyword Wizard</a>
+      </div>
+    </header>
+
+    <section class="scraper-panel">
+      <div class="panel-head">
+        <h2>Recent Scraper Runs</h2>
+        <span class="key-chip {% if has_rapidapi_key %}ok{% else %}warn{% endif %}">
+          {% if has_rapidapi_key %}RapidAPI key active{% else %}RapidAPI key needed{% endif %}
+        </span>
+      </div>
+      <div class="scraper-run-list">
+        {% if recent_scrapes %}
+          {% for s in recent_scrapes %}
+          <a href="/scraper/jobs/{{ s.id }}" class="scraper-run">
+            <strong>{{ s.name }}</strong>
+            <span>{{ s.total }} titles · {{ s.results|length }} rows · {{ s.state }}</span>
+          </a>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state">No scraper runs yet.</div>
+        {% endif %}
+      </div>
+    </section>
+
+    <div id="settingsPanel" class="settings-panel" aria-hidden="true">
+      <div class="settings-card">
+        <div class="settings-head">
+          <h2>Settings</h2>
+          <button type="button" class="icon-btn" onclick="closeSettings()">×</button>
+        </div>
+        <form action="/settings/all" method="post" class="settings-body">
+          <label>OpenAI Key</label>
+          <input type="password" name="one_time_openai_key" placeholder="Saved for Step 2 if provided">
+          <label>Gemini Key</label>
+          <input type="password" name="one_time_gemini_key" placeholder="Saved for Step 2 if provided">
+          <label>RapidAPI Key</label>
+          <input type="password" name="rapidapi_key" placeholder="{% if has_rapidapi_key %}Saved{% else %}Paste key once and save{% endif %}">
+          <button class="primary-btn full" type="submit">Save API Keys</button>
+        </form>
+      </div>
+    </div>
+  </main>
+</div>
+
+<style>
+  .scraper-page {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    background: #fafafa;
+    color: #2b2f39;
+    zoom: .8;
+  }
+  .scraper-side {
+    background: #f0f1f5;
+    border-right: 1px solid #e1e3ea;
+    padding: 22px 16px;
+  }
+  .side-section {
+    border-bottom: 1px solid #d9dce5;
+    padding: 0 0 22px;
+    margin-bottom: 24px;
+    display: grid;
+    gap: 8px;
+  }
+  .side-section h2 {
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .side-section label {
+    font-size: 11px;
+    font-weight: 750;
+    color: #606574;
+  }
+  .side-section input,
+  .side-section textarea {
+    width: 100%;
+    border: 1px solid #e2e4eb;
+    border-radius: 6px;
+    background: #fff;
+    padding: 9px 10px;
+    font-size: 12px;
+  }
+  .side-section textarea {
+    resize: vertical;
+    min-height: 120px;
+  }
+  .file-picker {
+    min-height: 52px;
+    border: 1px solid #e2e4eb;
+    border-radius: 6px;
+    background: #fff;
+    padding: 10px;
+    display: grid;
+    gap: 6px;
+    color: #8a8f9c;
+    font-size: 11px;
+  }
+  .full {
+    width: max-content;
+  }
+  .scraper-main {
+    padding: 70px 54px;
+  }
+  .scraper-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+  .scraper-head p {
+    margin: 0 0 4px;
+    color: #747986;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .scraper-head h1 {
+    margin: 0;
+    font-size: 34px;
+    line-height: 1;
+    font-weight: 850;
+  }
+  .scraper-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .scraper-panel {
+    max-width: 980px;
+    border: 1px solid #e7e9ef;
+    border-radius: 8px;
+    background: #fff;
+    padding: 16px;
+    box-shadow: 0 1px 2px rgba(20, 20, 20, .03);
+  }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .panel-head h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 820;
+  }
+  .key-chip {
+    border-radius: 999px;
+    padding: 5px 8px;
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .key-chip.ok {
+    background: #e8f8ef;
+    color: #166534;
+  }
+  .key-chip.warn {
+    background: #fff5dd;
+    color: #9a5b00;
+  }
+  .scraper-run-list {
+    display: grid;
+    gap: 8px;
+  }
+  .scraper-run {
+    min-height: 46px;
+    border: 1px solid #edf0f5;
+    border-radius: 6px;
+    padding: 9px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-decoration: none;
+    color: #30343d;
+  }
+  .scraper-run span {
+    color: #7b808c;
+    font-size: 11px;
+  }
+  .empty-state {
+    height: 120px;
+    display: grid;
+    place-items: center;
+    color: #9297a3;
+  }
+  .settings-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: none;
+    justify-content: flex-end;
+    background: rgba(0,0,0,.18);
+  }
+  .settings-panel.open {
+    display: flex;
+  }
+  .settings-card {
+    width: min(420px, 100vw);
+    height: 100vh;
+    background: #fff;
+    box-shadow: -8px 0 24px rgba(0,0,0,.14);
+  }
+  .settings-head {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e1e3ea;
+    padding: 0 16px;
+  }
+  .settings-body {
+    padding: 14px;
+    display: grid;
+    gap: 9px;
+  }
+  .settings-body input {
+    width: 100%;
+    border: 1px solid #e2e4eb;
+    border-radius: 6px;
+    padding: 9px 10px;
+    font-size: 12px;
+  }
+  @media (max-width: 900px) {
+    .scraper-page { grid-template-columns: 1fr; }
+    .scraper-main { padding: 28px 18px; }
+  }
+</style>
+
+<script>
+function openSettings() {
+  document.getElementById("settingsPanel").classList.add("open");
+}
+function closeSettings() {
+  document.getElementById("settingsPanel").classList.remove("open");
+}
+function guardRapidKey() {
+  const hasRapidKey = {{ 'true' if has_rapidapi_key else 'false' }};
+  if (hasRapidKey) return true;
+  alert("Add RAPIDAPI_KEY in Settings before running Title Scraper.");
+  openSettings();
+  return false;
+}
+</script>
+
+{% endblock %}

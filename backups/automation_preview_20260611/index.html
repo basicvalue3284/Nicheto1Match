@@ -1,0 +1,1739 @@
+{% extends "base.html" %}
+{% block title %}Keyword Wizard{% endblock %}
+{% block content %}
+
+<div class="wizard-page">
+  <header class="wizard-header">
+    <div class="home-title">
+      <h1>Keyword Wizard</h1>
+    </div>
+    <div class="wizard-actions">
+      <a href="/scraper" class="quiet-btn link-btn">Title Scraper</a>
+      {% if recent_jobs %}
+      <a href="/jobs/{{ recent_jobs[0].id }}" class="quiet-btn link-btn">Recent Run</a>
+      {% endif %}
+      <button type="button" class="quiet-btn" onclick="openSettings()">Settings</button>
+    </div>
+  </header>
+
+  <form action="/jobs" method="post" enctype="multipart/form-data" id="uploadForm" class="wizard-form">
+    <input type="hidden" name="run_now" value="no" id="runNow">
+    <input type="hidden" name="auto_export" value="yes">
+    <input type="hidden" name="selected_payload" value="" id="selectedPayload">
+    <input type="hidden" name="phase_mode" value="auto" id="phaseMode">
+
+    <section class="section-block get-started" id="getStarted">
+      <div class="section-title-row">
+        <h2>Upload Files</h2>
+        <span class="step-state" id="inputState">Waiting for titles</span>
+      </div>
+
+      <div class="start-grid">
+        <div class="panel-card upload-card">
+          <div class="panel-head">
+            <h3>Upload Titles</h3>
+            <span class="soft-pill">CSV / TSV / TXT / XLSX</span>
+          </div>
+
+          <label class="drop-card" id="dropZone">
+            <span class="upload-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0 5 5m-5-5L7 9"/><path d="M5 16v3h14v-3"/></svg>
+            </span>
+            <strong id="dropText">Drop your title file here</strong>
+            <small>or click to browse</small>
+            <input type="file" name="file" id="fileInput" accept=".csv,.tsv,.txt,.xlsx,.xls">
+          </label>
+
+          <label class="field-label" for="nicheInput">Niche name</label>
+          <input id="nicheInput" name="niche" class="wizard-input" placeholder="Auto-filled from file or first title">
+
+          <label class="field-label" for="pasteTitles">Or paste titles</label>
+          <textarea id="pasteTitles" name="pasted" class="paste-area" rows="4" placeholder="One title per line"></textarea>
+
+          <div class="phase-mode upload-phase-mode" aria-label="Phase 1 mode">
+            <button type="button" class="phase-option active" data-phase="auto" onclick="setPhaseMode('auto')">Automated Phase 1</button>
+            <button type="button" class="phase-option" data-phase="manual" onclick="setPhaseMode('manual')">Manual Review</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="section-block tools-section collapsed-step" id="toolsStep">
+      <div class="section-title-row">
+        <h2>Step 2: Tools & Filter</h2>
+      </div>
+      <div class="tools-card">
+        <button type="button" class="tool-btn" data-filter="raw" onclick="setBucket('raw')">Raw List (<span id="rawCount">0</span>)</button>
+        <button type="button" class="tool-btn" data-filter="howto" onclick="setBucket('howto')">How-To (<span id="howToCount">0</span>)</button>
+        <button type="button" class="tool-btn" data-filter="start" onclick="setBucket('start')">How-To (Start) (<span id="startCount">0</span>)</button>
+        <button type="button" class="tool-btn" data-filter="board" onclick="setBucket('board')">How-To (Board) (<span id="boardCount">0</span>)</button>
+
+        <button type="button" class="tool-btn" data-filter="shorts" onclick="setBucket('shorts')">How-To (Shorts) (<span id="shortsCount">0</span>)</button>
+        <button type="button" class="tool-btn" data-filter="non" onclick="setBucket('non')">Non How-To (<span id="nonCount">0</span>)</button>
+        <button type="button" class="tool-btn" onclick="setBucket(currentBucket); highlightDuplicates()">Check for Duplicates</button>
+        <button type="submit" class="tool-btn send-step-btn action-tool" onclick="setRunModeForPhase()">Send to Step 2: Extract & Policy</button>
+
+        <button type="button" class="tool-btn" onclick="copyVisibleRows()">Copy Visible (<span id="copyCount">0</span>)</button>
+        <button type="button" class="tool-btn danger-tool" onclick="deleteSelected()">Delete Selection (<span id="deleteCount">0</span>)</button>
+        <button type="button" class="tool-btn accent-tool active" data-filter="final" onclick="setBucket('final')">Final List (<span id="finalCount">0</span>)</button>
+        <a class="tool-btn link-tool" href="#" onclick="downloadPreview('final'); return false;">Download Final List</a>
+        <a class="tool-btn link-tool" href="#" onclick="downloadPreview('master'); return false;">Download Master Sheet</a>
+      </div>
+    </section>
+
+    <section class="analysis-card collapsed-step" id="analysisStep">
+      <div class="analysis-head">
+        <h2>Title Analysis <span id="analysisCount" class="analysis-count">0</span></h2>
+        <div class="analysis-actions">
+          <input class="title-search" id="titleSearch" type="search" placeholder="Search titles..." oninput="searchTitles(this.value)">
+          <button type="button" class="quiet-btn" onclick="toggleAnalysisFullscreen()">Toggle Fullscreen</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="preview-table">
+          <thead>
+            <tr id="previewHeader"></tr>
+          </thead>
+          <tbody id="previewRows">
+            <tr class="empty-row">
+              <td colspan="6">
+                <div class="empty-state">
+                  <span class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M9 5v14"/></svg>
+                  </span>
+                  <strong>No data</strong>
+                  <small>Upload a file or paste titles to preview the analysis here.</small>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div id="settingsPanel" class="settings-panel" aria-hidden="true">
+      <div class="settings-card">
+        <div class="settings-head">
+          <h2>Settings</h2>
+          <button type="button" class="icon-btn" onclick="closeSettings()">×</button>
+        </div>
+        <div class="settings-body">
+          <label>AI provider</label>
+          <select name="provider" id="providerSelect">
+            <option value="openai" {% if default_provider == 'openai' %}selected{% endif %}>OpenAI</option>
+            <option value="gemini" {% if default_provider == 'gemini' %}selected{% endif %}>Google Gemini</option>
+          </select>
+
+          <label>Model preset</label>
+          <select id="modelPreset"></select>
+
+          <label>Model id</label>
+          <input type="text" name="model" id="modelInput" value="{{ default_model }}">
+
+          <label>One-time OpenAI key</label>
+          <input type="password" name="one_time_openai_key" placeholder="{% if has_server_key %}Optional{% else %}Required unless server key is set{% endif %}">
+
+          <label>One-time Gemini key</label>
+          <input type="password" name="one_time_gemini_key" placeholder="{% if has_gemini_key %}Optional{% else %}Required unless Gemini key is set{% endif %}">
+
+          <label>RapidAPI key</label>
+          <input type="password" name="rapidapi_key" placeholder="{% if has_rapidapi_key %}Saved{% else %}Paste key once for Step 3{% endif %}">
+
+          <button type="submit" class="primary-btn" formaction="/settings/all" formmethod="post">Save API Keys</button>
+
+          <label>Batch size</label>
+          <input type="number" name="batch_size" min="5" max="50" value="{{ default_batch_size }}">
+
+          <label class="inline-check">
+            <input type="checkbox" id="saveDefaults">
+            Make this provider and model my default in this browser
+          </label>
+
+          <label>Extraction title rules / examples</label>
+          <div class="examples-table-wrap">
+            <table class="examples-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Before (raw title)</th>
+                  <th>After (cleaned title)</th>
+                  <th>Notes / Tag</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ex in cleaning_examples %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>{{ ex.before }}</td>
+                  <td>{{ ex.after }}</td>
+                  <td>{{ ex.notes }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <label>Add more extraction examples</label>
+          <textarea name="extra_cleaning_examples" rows="5" placeholder="Raw title => Cleaned title&#10;Raw title | Cleaned title | note"></textarea>
+
+          <label>Policy checker prompt</label>
+          <textarea name="policy_prompt" rows="10">{{ policy_prompt }}</textarea>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<style>
+  .wizard-page {
+    min-height: 100vh;
+    background: #fafafa;
+    color: #202124;
+    padding: 22px 20px 24px;
+    font-size: 10.5px;
+    zoom: .8;
+  }
+  .wizard-form {
+    min-height: calc(125vh - 150px);
+    display: flex;
+    flex-direction: column;
+  }
+  .wizard-header,
+  .section-block,
+  .analysis-card {
+    width: min(1680px, 100%);
+    margin: 0 auto;
+  }
+  .wizard-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+  .home-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+  }
+  .wizard-kicker {
+    margin: 0 0 7px;
+    color: #707481;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .wizard-header h1 {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.1;
+    font-weight: 760;
+    color: #202124;
+  }
+  .wizard-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-top: 2px;
+    margin-left: auto;
+  }
+  .section-block {
+    margin-top: 24px;
+    transition: opacity .18s ease;
+  }
+  .section-title-row {
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .phase-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px;
+    border: 1px solid #e6e7ee;
+    border-radius: 6px;
+    background: #fff;
+  }
+  .phase-option {
+    min-height: 26px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: #656a75;
+    padding: 0 10px;
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .phase-option.active {
+    background: #f2f0ff;
+    color: #5d52dc;
+  }
+  .upload-phase-mode {
+    width: 100%;
+    justify-content: stretch;
+    margin-top: 12px;
+  }
+  .upload-phase-mode .phase-option {
+    flex: 1 1 0;
+  }
+  .section-title-row h2,
+  .analysis-head h2 {
+    margin: 0;
+    color: #3f424a;
+    font-size: 13px;
+    font-weight: 760;
+  }
+  .step-state {
+    border-radius: 999px;
+    background: #f5f6fa;
+    color: #7a7f8c;
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 760;
+  }
+  .start-grid {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr);
+    gap: 13px;
+  }
+  .get-started.is-complete {
+    display: none;
+  }
+  .panel-card,
+  .tools-card,
+  .analysis-card {
+    border: 1px solid #e8e9ee;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(20, 20, 20, .03);
+  }
+  .panel-card {
+    min-height: 260px;
+    padding: 16px;
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .panel-head h3 {
+    margin: 0;
+    color: #454853;
+    font-size: 12px;
+    font-weight: 760;
+  }
+  .soft-pill,
+  .key-chip {
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 9px;
+    font-weight: 760;
+  }
+  .soft-pill {
+    background: #f5f6fa;
+    color: #7b7f8c;
+  }
+  .key-chip.ok {
+    background: #ecfdf3;
+    color: #24733c;
+  }
+  .key-chip.warn {
+    background: #fff7ed;
+    color: #a15c00;
+  }
+  .drop-card {
+    min-height: 124px;
+    border: 1px dashed #d8dae3;
+    border-radius: 8px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: #6d7280;
+    cursor: pointer;
+    transition: border-color .16s ease, background .16s ease;
+  }
+  .drop-card:hover,
+  .drop-card.dragging {
+    border-color: #7167e8;
+    background: #f7f6ff;
+  }
+  .drop-card input {
+    display: none;
+  }
+  .drop-card strong {
+    color: #60636f;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .drop-card small {
+    color: #8e929e;
+    font-size: 10px;
+  }
+  .upload-icon,
+  .empty-icon {
+    width: 31px;
+    height: 31px;
+    display: grid;
+    place-items: center;
+    color: #a2a6b2;
+  }
+  .upload-icon svg,
+  .empty-icon svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .field-label {
+    display: block;
+    margin: 12px 0 5px;
+    color: #676b76;
+    font-size: 10px;
+    font-weight: 760;
+  }
+  .wizard-input,
+  .paste-area,
+  .settings-body input,
+  .settings-body select,
+  .settings-body textarea {
+    width: 100%;
+    border: 1px solid #e5e7ed;
+    border-radius: 5px;
+    background: #fff;
+    color: #2f333b;
+    font-size: 11px;
+    outline: none;
+    transition: border-color .16s ease, box-shadow .16s ease;
+  }
+  .wizard-input,
+  .settings-body input,
+  .settings-body select {
+    height: 34px;
+    padding: 0 10px;
+  }
+  .paste-area,
+  .settings-body textarea {
+    padding: 10px;
+    resize: vertical;
+    min-height: 74px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .wizard-input:focus,
+  .paste-area:focus,
+  .settings-body input:focus,
+  .settings-body select:focus,
+  .settings-body textarea:focus {
+    border-color: #7167e8;
+    box-shadow: 0 0 0 3px rgba(113, 103, 232, .1);
+  }
+  .examples-table-wrap {
+    max-height: 360px;
+    overflow: auto;
+    border: 1px solid #e8e9ee;
+    border-radius: 6px;
+    background: #fff;
+  }
+  .examples-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+  }
+  .examples-table th,
+  .examples-table td {
+    border-bottom: 1px solid #eceef3;
+    padding: 7px 8px;
+    vertical-align: top;
+    text-align: left;
+  }
+  .examples-table th {
+    position: sticky;
+    top: 0;
+    background: #f7f8fb;
+    color: #575b66;
+    font-weight: 800;
+    z-index: 1;
+  }
+  .examples-table td:first-child,
+  .examples-table th:first-child {
+    width: 36px;
+    text-align: center;
+    color: #7a7f8c;
+  }
+  .job-list {
+    height: 172px;
+    margin-top: 12px;
+    border: 1px solid #ecedf2;
+    border-radius: 5px;
+    overflow: auto;
+  }
+  .job-row {
+    min-height: 42px;
+    padding: 8px 11px;
+    color: #3d4048;
+    border-bottom: 1px solid #f0f1f5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .job-row:hover {
+    background: #fafaff;
+  }
+  .job-row strong {
+    display: block;
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  .job-row small {
+    display: block;
+    margin-top: 2px;
+    color: #8a8e99;
+    font-size: 10px;
+  }
+  .job-row em {
+    color: #7167e8;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 760;
+  }
+  .empty-list {
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: #999da8;
+    font-size: 11px;
+  }
+  .open-primary {
+    display: grid;
+    place-items: center;
+    min-height: 34px;
+    margin-top: 12px;
+    border: 1px solid #d5d0ff;
+    border-radius: 5px;
+    background: #eeeaff;
+    color: #5d52dc;
+    text-decoration: none;
+    font-weight: 760;
+  }
+  .open-primary.disabled {
+    opacity: .55;
+  }
+  .open-secondary {
+    display: grid;
+    place-items: center;
+    min-height: 32px;
+    margin-top: 8px;
+    border: 1px solid #e5e7ed;
+    border-radius: 5px;
+    background: #fff;
+    color: #4a4e58;
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .collapsed-step {
+    max-height: 46px;
+    overflow: hidden;
+    opacity: .66;
+  }
+  .wizard-page.has-input .collapsed-step {
+    max-height: none;
+    overflow: visible;
+    opacity: 1;
+  }
+  .tools-card {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 10px;
+    padding: 13px;
+  }
+  .tool-btn,
+  .quiet-btn,
+  .accent-btn {
+    min-height: 32px;
+    border: 1px solid #e5e7ed;
+    border-radius: 5px;
+    background: #fff;
+    color: #4a4e58;
+    font-size: 11px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    text-decoration: none;
+  }
+  .tool-btn:hover,
+  .quiet-btn:hover {
+    border-color: #7167e8;
+    background: #fbfaff;
+  }
+  .tool-btn.active {
+    border-color: #c6c0fb;
+    background: #f2f0ff;
+    color: #5d52dc;
+    box-shadow: inset 0 0 0 1px rgba(113, 103, 232, .11);
+  }
+  .tool-btn.muted {
+    color: #b4b7c0;
+    background: #fff;
+  }
+  .tool-btn.accent-tool,
+  .accent-btn {
+    border-color: #d2cdff;
+    background: #eeeaff;
+    color: #5d52dc;
+  }
+  .tool-btn.send-step-btn {
+    border-color: #bfe8cf;
+    background: #eaf8ef;
+    color: #24733c;
+    font-weight: 760;
+  }
+  .tool-btn.send-step-btn:hover {
+    border-color: #9edbb7;
+    background: #ddf4e6;
+  }
+  .tool-btn.accent-tool.active {
+    background: #e5e1ff;
+    border-color: #b9b1f7;
+    color: #5146cf;
+    box-shadow: 0 0 0 3px rgba(113, 103, 232, .1);
+  }
+  .tool-btn.action-tool {
+    color: #5f56c9;
+  }
+  .tool-btn.danger-tool {
+    color: #934044;
+  }
+  .tool-btn.danger-tool:hover {
+    border-color: #e7b6ba;
+    background: #fff7f7;
+  }
+  .tool-btn.link-tool {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+  .quiet-btn {
+    padding: 0 13px;
+  }
+  .accent-btn {
+    padding: 0 15px;
+    min-height: 34px;
+  }
+  .analysis-card {
+    margin-top: 24px;
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .analysis-head {
+    min-height: 44px;
+    padding: 0 14px;
+    border-bottom: 1px solid #ecedf2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .analysis-head h2 {
+    margin: 0;
+    flex: 0 0 auto;
+  }
+  .analysis-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .title-search {
+    width: min(300px, 100%);
+    height: 32px;
+    border: 1px solid #e5e7ed;
+    border-radius: 5px;
+    background: #fff;
+    color: #2f333b;
+    font-size: 11px;
+    padding: 0 10px;
+    outline: none;
+  }
+  .title-search:focus {
+    border-color: #7167e8;
+    box-shadow: 0 0 0 3px rgba(113, 103, 232, .1);
+  }
+  .analysis-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 28px;
+    min-height: 18px;
+    margin-left: 7px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #f2f0ff;
+    color: #5d52dc;
+    font-size: 10px;
+    font-weight: 600;
+    vertical-align: middle;
+  }
+  .table-scroll {
+    flex: 1 1 auto;
+    min-height: 520px;
+    max-height: calc(125vh - 520px);
+    overflow: auto;
+  }
+  .preview-table {
+    width: 100%;
+    min-width: 900px;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .preview-table th {
+    height: 38px;
+    padding: 0 13px;
+    border-bottom: 1px solid #ecedf2;
+    background: #fff;
+    color: #8a8e99;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    text-align: left;
+    text-transform: uppercase;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    user-select: none;
+    position: sticky;
+  }
+  .preview-table th[draggable="true"] {
+    cursor: grab;
+  }
+  .preview-table th.resizing {
+    cursor: col-resize;
+  }
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 7px;
+    height: 100%;
+    cursor: col-resize;
+  }
+  .resize-handle:hover {
+    background: #d8d4ff;
+  }
+  .preview-table th.drag-over {
+    background: #f2f0ff;
+    color: #5d52dc;
+  }
+  .preview-table td {
+    height: 44px;
+    padding: 0 13px;
+    border-bottom: 1px solid #f0f1f5;
+    color: #4b4f59;
+    vertical-align: middle;
+  }
+  .preview-table .col-rownum {
+    width: 56px;
+    min-width: 56px;
+    color: #8a8e99;
+    text-align: center;
+  }
+  .preview-table .col-select {
+    width: 42px;
+    min-width: 42px;
+    text-align: center;
+  }
+  .preview-table .col-title,
+  .preview-table .col-extracted {
+    min-width: 720px;
+  }
+  .preview-table .col-removed {
+    min-width: 220px;
+  }
+  .preview-table .col-preferred,
+  .preview-table .col-status {
+    min-width: 160px;
+  }
+  .preview-table .col-actions {
+    min-width: 190px;
+  }
+  .preview-table .col-notes {
+    min-width: 240px;
+  }
+  .title-cell {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+  }
+  .title-cell span {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .title-edit-input {
+    width: 100%;
+    min-height: 28px;
+    border: 1px solid #dcdfea;
+    border-radius: 5px;
+    padding: 0 8px;
+    color: #2f333b;
+    font-size: 11px;
+  }
+  .mini-btn {
+    width: 28px;
+    min-width: 28px;
+    min-height: 26px;
+    border: 1px solid #e5e7ed;
+    border-radius: 5px;
+    background: #fff;
+    color: #5d6470;
+    padding: 0;
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-grid;
+    place-items: center;
+  }
+  .mini-btn svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .mini-btn:hover {
+    border-color: #c6c0fb;
+    background: #fbfaff;
+    color: #5146cf;
+  }
+  .type-select {
+    min-width: 132px;
+    min-height: 28px;
+    border: 1px solid #b9e0bf;
+    border-radius: 5px;
+    background: #d8f0dc;
+    color: #2f7d3c;
+    padding: 0 7px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .row-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .icon-action {
+    width: 28px;
+    min-width: 28px;
+    min-height: 26px;
+    border: 1px solid #e5e7ed;
+    border-radius: 6px;
+    background: #fff;
+    color: #4a4e58;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .tag-action,
+  .final-action {
+    width: auto;
+    min-width: 48px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+  .status-select {
+    min-width: 132px;
+    min-height: 28px;
+    border: 1px solid #e5e7ed;
+    border-radius: 5px;
+    background: #fff;
+    color: #4a4e58;
+    padding: 0 7px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .status-select.safe {
+    border-color: #b7e4c7;
+    background: #f0fff5;
+    color: #24733c;
+  }
+  .status-select.risky {
+    border-color: #ffe0a8;
+    background: #fff9ed;
+    color: #946200;
+  }
+  .status-select.prohibited {
+    border-color: #f3bdc1;
+    background: #fff5f6;
+    color: #934044;
+  }
+  .single-line {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .preview-table .muted-cell {
+    color: #989ca7;
+  }
+  .preview-table .duplicate-row td {
+    background: #fff9ed;
+  }
+  .bucket-pill {
+    border-radius: 4px;
+    padding: 3px 7px;
+    background: #f5f6fa;
+    color: #626773;
+    font-size: 10px;
+    font-weight: 760;
+  }
+  .bucket-pill.final {
+    background: #f4f2ff;
+    color: #6458d6;
+  }
+  .preview-table .check-col {
+    width: 42px;
+  }
+  .preview-table input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+    accent-color: #7167e8;
+  }
+  .column-menu-btn {
+    float: right;
+    width: 22px;
+    height: 22px;
+    border: 1px solid #e5e7ed;
+    border-radius: 5px;
+    background: #fff;
+    color: #727783;
+    line-height: 1;
+  }
+  .column-menu {
+    position: fixed;
+    z-index: 100;
+    width: 180px;
+    border: 1px solid #e2e4eb;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(20, 20, 20, .14);
+    padding: 6px;
+  }
+  .column-menu button {
+    width: 100%;
+    min-height: 31px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    text-align: left;
+    color: #3f4450;
+    font-size: 12px;
+    padding: 0 9px;
+  }
+  .column-menu button:hover {
+    background: #f5f6fa;
+  }
+  .analysis-card.fullscreen-table {
+    position: fixed;
+    inset: 12px;
+    z-index: 80;
+    width: auto;
+    margin: 0;
+    background: #fff;
+    box-shadow: 0 18px 45px rgba(20, 20, 20, .2);
+  }
+  .analysis-card.fullscreen-table .table-scroll {
+    max-height: none;
+  }
+  .empty-row td {
+    height: 190px;
+    border-bottom: 0;
+  }
+  .empty-state {
+    display: grid;
+    place-items: center;
+    color: #9da1aa;
+    gap: 5px;
+  }
+  .empty-state strong {
+    color: #6f7380;
+    font-size: 12px;
+  }
+  .empty-state small {
+    font-size: 11px;
+  }
+  .inline-check {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px !important;
+    font-weight: 700;
+  }
+  .inline-check input {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+  }
+  @media (max-width: 900px) {
+    .wizard-page {
+      padding: 24px 14px 54px;
+    }
+    .wizard-header {
+      flex-direction: column;
+    }
+    .wizard-actions {
+      width: 100%;
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .analysis-head {
+      align-items: stretch;
+      flex-direction: column;
+      padding: 12px 14px;
+    }
+    .analysis-actions {
+      width: 100%;
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .section-title-row {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .phase-mode {
+      width: 100%;
+      justify-content: stretch;
+    }
+    .phase-option {
+      flex: 1;
+    }
+    .title-search {
+      width: 100%;
+    }
+    .start-grid,
+    .tools-card {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+let currentBucket = "final";
+let previewItems = [];
+let duplicateKeys = new Set();
+let titleSearchQuery = "";
+let phaseMode = "auto";
+
+const typeOptions = [
+  { bucket: "start", label: "How-To (Start)" },
+  { bucket: "board", label: "How-To (Board)" },
+  { bucket: "shorts", label: "How-To (Shorts)" },
+  { bucket: "non", label: "Non How-To" }
+];
+const policyStatusOptions = ["Pending", "SAFE", "RISKY", "PROHIBITED"];
+const tableColumns = {
+  select: "",
+  title: "Title",
+  preferred: "Tag",
+  actions: "Actions",
+};
+let columnOrder = ["select", "title", "preferred", "actions"];
+let draggingColumn = "";
+let resizingColumn = null;
+const columnWidths = {};
+let selectedPreviewRows = new Set();
+
+const modelOptions = {
+  openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "custom"],
+  gemini: ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash", "gemini-2.5-flash", "custom"]
+};
+
+function setRunMode(value) {
+  document.getElementById("runNow").value = value;
+  syncSelectedPayload();
+  saveDefaultSettings();
+}
+function setRunModeForPhase() {
+  setRunMode(phaseMode === "auto" ? "yes" : "no");
+}
+function setPhaseMode(value) {
+  phaseMode = value === "manual" ? "manual" : "auto";
+  document.getElementById("phaseMode").value = phaseMode;
+  document.querySelectorAll(".phase-option").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.phase === phaseMode);
+  });
+}
+function openSettings() {
+  document.getElementById("settingsPanel").classList.add("open");
+}
+function closeSettings() {
+  document.getElementById("settingsPanel").classList.remove("open");
+}
+function filterJobs() {
+  const q = document.getElementById("jobSearch").value.toLowerCase().trim();
+  document.querySelectorAll(".job-row").forEach(row => {
+    row.style.display = !q || row.dataset.search.includes(q) ? "" : "none";
+  });
+}
+function titleFromFilename(name) {
+  return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function firstTitleFromPaste() {
+  return document.getElementById("pasteTitles").value.split(/\r?\n/).map(line => line.trim()).find(Boolean) || "";
+}
+function parseLines(text) {
+  return text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+}
+function parseTextFile(text, filename) {
+  const lower = filename.toLowerCase();
+  const lines = parseLines(text);
+  if (!lower.endsWith(".csv") && !lower.endsWith(".tsv")) return lines;
+  const delimiter = lower.endsWith(".tsv") ? "\t" : ",";
+  const rows = lines.map(line => line.split(delimiter).map(value => value.trim().replace(/^"|"$/g, "")));
+  if (!rows.length) return [];
+  const header = rows[0].map(value => value.toLowerCase());
+  const titleIndex = header.findIndex(value => ["title", "raw title", "input title", "input titles", "titles"].includes(value));
+  const dataRows = titleIndex >= 0 ? rows.slice(1) : rows;
+  const idx = titleIndex >= 0 ? titleIndex : 0;
+  return dataRows.map(row => row[idx] || "").filter(Boolean);
+}
+function classifyTitle(title) {
+  const hashtagCount = (title.match(/#\w+/g) || []).length;
+  const lower = title.toLowerCase();
+  if (hashtagCount > 2) return { bucket: "shorts", label: "How-To (Shorts)", hashtagCount };
+  if (/^\s*how\s+to\b/i.test(title)) return { bucket: "start", label: "How-To (Start)", hashtagCount };
+  if (/\bhow\s+to\b/i.test(title)) return { bucket: "board", label: "How-To (Board)", hashtagCount };
+  return { bucket: "non", label: "Non How-To", hashtagCount };
+}
+function buildPreview(titles) {
+  const seen = new Map();
+  previewItems = titles.map((title, index) => {
+    const cleanKey = title.trim().toLowerCase();
+    const info = classifyTitle(title);
+    const duplicate = seen.has(cleanKey);
+    seen.set(cleanKey, (seen.get(cleanKey) || 0) + 1);
+    return {
+      index: index + 1,
+      title,
+      bucket: info.bucket,
+      type: info.label,
+      hashtagCount: info.hashtagCount,
+      duplicate,
+      final: !["non", "shorts"].includes(info.bucket),
+      extractedTitle: "",
+      removedText: "",
+      policyStatus: "Pending",
+      editing: false,
+    };
+  });
+  duplicateKeys = new Set([...seen.entries()].filter(([, count]) => count > 1).map(([key]) => key));
+  updateCounts();
+  setBucket("final");
+}
+function countWhere(predicate) {
+  return previewItems.filter(predicate).length;
+}
+function updateCounts() {
+  document.getElementById("rawCount").textContent = previewItems.length;
+  document.getElementById("startCount").textContent = countWhere(item => item.bucket === "start");
+  document.getElementById("boardCount").textContent = countWhere(item => item.bucket === "board");
+  document.getElementById("shortsCount").textContent = countWhere(item => item.bucket === "shorts");
+  document.getElementById("nonCount").textContent = countWhere(item => item.bucket === "non");
+  document.getElementById("howToCount").textContent = countWhere(item => item.bucket !== "non");
+  document.getElementById("finalCount").textContent = countWhere(item => item.final && !item.duplicate);
+  document.getElementById("deleteCount").textContent = selectedPreviewRows.size || filteredItems().length;
+  document.getElementById("copyCount").textContent = filteredItems().length;
+  syncSelectedPayload();
+}
+function filteredItems() {
+  let rows;
+  if (currentBucket === "raw") rows = previewItems;
+  else if (currentBucket === "howto") rows = previewItems.filter(item => item.bucket !== "non");
+  else if (currentBucket === "final") rows = previewItems.filter(item => item.final && !item.duplicate);
+  else if (currentBucket === "non") rows = previewItems.filter(item => item.bucket === "non");
+  else rows = previewItems.filter(item => item.bucket === currentBucket);
+
+  if (!titleSearchQuery) return rows;
+  return rows.filter(item => item.title.toLowerCase().includes(titleSearchQuery));
+}
+function setBucket(bucket) {
+  currentBucket = bucket;
+  document.querySelectorAll("[data-filter]").forEach(btn => btn.classList.toggle("active", btn.dataset.filter === bucket));
+  renderPreview();
+}
+function searchTitles(value) {
+  titleSearchQuery = value.trim().toLowerCase();
+  renderPreview();
+}
+function deleteSelected() {
+  const removeIndexes = selectedPreviewRows.size ? selectedPreviewRows : new Set(filteredItems().map(item => item.index));
+  if (!removeIndexes.size) return;
+  previewItems = previewItems.filter(item => !removeIndexes.has(item.index)).map((item, index) => ({
+    ...item,
+    index: index + 1,
+  }));
+  rebuildDuplicateState();
+  selectedPreviewRows.clear();
+  updateCounts();
+  renderPreview();
+}
+function togglePreviewRow(index, checked) {
+  if (checked) selectedPreviewRows.add(index);
+  else selectedPreviewRows.delete(index);
+  updateCounts();
+}
+function toggleVisiblePreviewRows(checked) {
+  filteredItems().forEach(item => {
+    if (checked) selectedPreviewRows.add(item.index);
+    else selectedPreviewRows.delete(item.index);
+  });
+  document.querySelectorAll("#previewRows .row-check").forEach(box => {
+    box.checked = checked;
+  });
+  updateCounts();
+}
+async function copyVisibleRows() {
+  const rows = filteredItems();
+  document.getElementById("copyCount").textContent = rows.length;
+  if (!rows.length) return;
+  const headers = columnOrder.map(key => tableColumns[key]);
+  const lines = [
+    headers.join("\t"),
+    ...rows.map(item => columnOrder.map(key => valueForCopy(key, item)).join("\t")),
+  ];
+  const text = lines.join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    const temp = document.createElement("textarea");
+    temp.value = text;
+    temp.style.position = "fixed";
+    temp.style.left = "-9999px";
+    document.body.appendChild(temp);
+    temp.select();
+    document.execCommand("copy");
+    temp.remove();
+  }
+  document.getElementById("inputState").textContent = `${rows.length} visible row(s) copied`;
+}
+function valueForCopy(key, item) {
+  const values = {
+    rownum: item.index,
+    select: selectedPreviewRows.has(item.index) ? "Selected" : "",
+    title: item.title,
+    preferred: item.type,
+    actions: item.final ? "Final" : "Not final",
+  };
+  return String(values[key] ?? "").replace(/\s+/g, " ").trim();
+}
+function rebuildDuplicateState() {
+  const seen = new Map();
+  previewItems = previewItems.map(item => {
+    const cleanKey = item.title.trim().toLowerCase();
+    const duplicate = seen.has(cleanKey);
+    seen.set(cleanKey, (seen.get(cleanKey) || 0) + 1);
+    return {
+      ...item,
+      duplicate,
+    };
+  });
+  duplicateKeys = new Set([...seen.entries()].filter(([, count]) => count > 1).map(([key]) => key));
+}
+function toggleEdit(index) {
+  const item = previewItems.find(row => row.index === index);
+  if (!item) return;
+  item.editing = !item.editing;
+  renderPreview();
+}
+function saveTitleEdit(index, value) {
+  const item = previewItems.find(row => row.index === index);
+  if (!item) return;
+  item.title = value.trim() || item.title;
+  item.editing = false;
+  rebuildDuplicateState();
+  updateCounts();
+  renderPreview();
+}
+function setPreferredType(index, bucket) {
+  const item = previewItems.find(row => row.index === index);
+  const option = typeOptions.find(entry => entry.bucket === bucket);
+  if (!item || !option) return;
+  item.bucket = option.bucket;
+  item.type = option.label;
+  item.final = !["non", "shorts"].includes(option.bucket);
+  updateCounts();
+  renderPreview();
+}
+function toggleFinal(index, checked) {
+  const item = previewItems.find(row => row.index === index);
+  if (!item) return;
+  item.final = Boolean(checked);
+  updateCounts();
+  renderPreview();
+}
+function setPolicyStatus(index, value) {
+  const item = previewItems.find(row => row.index === index);
+  if (!item || !policyStatusOptions.includes(value)) return;
+  item.policyStatus = value;
+  updateCounts();
+  renderPreview();
+}
+function syncSelectedPayload() {
+  const payload = previewItems.map(item => ({
+    title: item.title,
+    type: item.type,
+    bucket: item.bucket,
+    hashtag_count: item.hashtagCount || 0,
+    include_final: Boolean(item.final && !item.duplicate),
+    policy_status: item.policyStatus || "Pending",
+  }));
+  document.getElementById("selectedPayload").value = JSON.stringify(payload);
+}
+function typeSelectMarkup(item) {
+  const options = typeOptions.map(option => (
+    `<option value="${option.bucket}" ${option.bucket === item.bucket ? "selected" : ""}>${option.label}</option>`
+  )).join("");
+  return `<select class="type-select" onchange="setPreferredType(${item.index}, this.value)">${options}</select>`;
+}
+function policyStatusMarkup(item) {
+  const value = item.policyStatus || "Pending";
+  const statusClass = value.toLowerCase();
+  const options = policyStatusOptions.map(option => (
+    `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`
+  )).join("");
+  return `<select class="status-select ${statusClass}" onchange="setPolicyStatus(${item.index}, this.value)">${options}</select>`;
+}
+function noteForItem(item) {
+  if (item.duplicate) return "Duplicate";
+  if (item.policyStatus === "SAFE") return "Moves to Phase 2 by default";
+  if (item.policyStatus === "RISKY") return "Needs reason/review";
+  if (item.policyStatus === "PROHIBITED") return "Blocked unless overridden";
+  return "Phase 1 not run";
+}
+function renderTableHeader() {
+  const header = document.getElementById("previewHeader");
+  header.innerHTML = columnOrder.map(key => `
+    <th class="col-${key}" draggable="${["select", "actions"].includes(key) ? "false" : "true"}" data-column="${key}" style="${columnWidths[key] ? `width:${columnWidths[key]}px;min-width:${columnWidths[key]}px;` : ""}">
+      ${key === "select" ? `<input type="checkbox" onchange="toggleVisiblePreviewRows(this.checked)">` : tableColumns[key]}
+      ${!["select", "actions"].includes(key) ? `<button type="button" class="column-menu-btn" onclick="openPreviewColumnMenu(event, '${key}')">⋮</button>` : ""}
+      <span class="resize-handle" data-column="${key}" title="Drag to resize"></span>
+    </th>
+  `).join("");
+  header.querySelectorAll("th").forEach(th => {
+    if (["select", "actions"].includes(th.dataset.column)) return;
+    th.addEventListener("dragstart", event => {
+      draggingColumn = th.dataset.column;
+      event.dataTransfer.effectAllowed = "move";
+    });
+    th.addEventListener("dragover", event => {
+      event.preventDefault();
+      th.classList.add("drag-over");
+    });
+    th.addEventListener("dragleave", () => th.classList.remove("drag-over"));
+    th.addEventListener("drop", event => {
+      event.preventDefault();
+      th.classList.remove("drag-over");
+      moveColumn(draggingColumn, th.dataset.column);
+    });
+  });
+  header.querySelectorAll(".resize-handle").forEach(handle => {
+    handle.addEventListener("mousedown", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const th = handle.closest("th");
+      resizingColumn = {
+        key: handle.dataset.column,
+        startX: event.clientX,
+        startWidth: th.getBoundingClientRect().width,
+      };
+      th.classList.add("resizing");
+      document.addEventListener("mousemove", resizeColumn);
+      document.addEventListener("mouseup", stopResizeColumn);
+    });
+  });
+}
+function resizeColumn(event) {
+  if (!resizingColumn) return;
+  const nextWidth = Math.max(56, resizingColumn.startWidth + event.clientX - resizingColumn.startX);
+  columnWidths[resizingColumn.key] = nextWidth;
+  document.querySelectorAll(`.preview-table .col-${resizingColumn.key}`).forEach(cell => {
+    cell.style.width = `${nextWidth}px`;
+    cell.style.minWidth = `${nextWidth}px`;
+  });
+}
+function stopResizeColumn() {
+  document.querySelectorAll(".preview-table th.resizing").forEach(th => th.classList.remove("resizing"));
+  resizingColumn = null;
+  document.removeEventListener("mousemove", resizeColumn);
+  document.removeEventListener("mouseup", stopResizeColumn);
+}
+function moveColumn(fromKey, toKey) {
+  if (!fromKey || !toKey || fromKey === toKey) return;
+  const fromIndex = columnOrder.indexOf(fromKey);
+  const toIndex = columnOrder.indexOf(toKey);
+  if (fromIndex < 0 || toIndex < 0) return;
+  const [moved] = columnOrder.splice(fromIndex, 1);
+  columnOrder.splice(toIndex, 0, moved);
+  renderPreview();
+}
+function renderColumnCell(key, item) {
+  const extracted = item.extractedTitle || "";
+  const removed = item.removedText || "";
+  const cells = {
+    select: `<input class="row-check" type="checkbox" ${selectedPreviewRows.has(item.index) ? "checked" : ""} onchange="togglePreviewRow(${item.index}, this.checked)">`,
+    title: titleMarkup(item),
+    preferred: typeSelectMarkup(item),
+    actions: actionMarkup(item),
+  };
+  const muted = "";
+  const width = columnWidths[key] ? ` style="width:${columnWidths[key]}px;min-width:${columnWidths[key]}px;"` : "";
+  return `<td class="col-${key}${muted}"${width}>${cells[key]}</td>`;
+}
+function toggleAnalysisFullscreen() {
+  document.getElementById("analysisStep").classList.toggle("fullscreen-table");
+}
+function openPreviewColumnMenu(event, key) {
+  event.stopPropagation();
+  showColumnMenu(event.currentTarget, key, ".preview-table", sortPreviewColumn, hidePreviewColumn, autosizePreviewColumn);
+}
+function sortPreviewColumn(key, direction) {
+  previewItems.sort((a, b) => valueForCopy(key, a).localeCompare(valueForCopy(key, b), undefined, { numeric: true }));
+  if (direction === "desc") previewItems.reverse();
+  renderPreview();
+}
+function hidePreviewColumn(key) {
+  if (["select", "title", "actions"].includes(key)) return;
+  columnOrder = columnOrder.filter(item => item !== key);
+  renderPreview();
+}
+function autosizePreviewColumn(key) {
+  columnWidths[key] = key === "title" ? 520 : 150;
+  renderPreview();
+}
+function showColumnMenu(anchor, key, tableSelector, sortFn, hideFn, autosizeFn) {
+  document.querySelectorAll(".column-menu").forEach(menu => menu.remove());
+  const menu = document.createElement("div");
+  menu.className = "column-menu";
+  menu.innerHTML = `
+    <button type="button" data-action="asc">↑ Sort ascending</button>
+    <button type="button" data-action="desc">↓ Sort descending</button>
+    <button type="button" data-action="size">↔ Autosize</button>
+    <button type="button" data-action="hide">⌧ Hide column</button>
+  `;
+  document.body.appendChild(menu);
+  const rect = anchor.getBoundingClientRect();
+  menu.style.left = `${Math.min(rect.left, window.innerWidth - 190)}px`;
+  menu.style.top = `${rect.bottom + 6}px`;
+  menu.addEventListener("click", event => {
+    const action = event.target.dataset.action;
+    if (action === "asc") sortFn(key, "asc");
+    if (action === "desc") sortFn(key, "desc");
+    if (action === "size") autosizeFn(key);
+    if (action === "hide") hideFn(key);
+    menu.remove();
+  });
+  setTimeout(() => document.addEventListener("click", () => menu.remove(), { once: true }), 0);
+}
+function downloadPreview(kind) {
+  const finalRows = previewItems.filter(item => item.final && !item.duplicate);
+  if (kind === "master") {
+    downloadMasterWorkbook();
+    return;
+  }
+  const rows = finalRows;
+  const headers = kind === "final" ? ["Title"] : ["#", "Title", "Preferred", "Final"];
+  const lines = [headers.join(",")].concat(rows.map(item => {
+    const values = kind === "final" ? [item.title] : [item.index, item.title, item.type, item.final ? "Yes" : "No"];
+    return values.map(value => `"${String(value).replace(/"/g, '""')}"`).join(",");
+  }));
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "final_titles.csv";
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+function workbookEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+function workbookSheet(name, rows) {
+  const sheetRows = rows.map(row => `<Row>${row.map(value => `<Cell><Data ss:Type="String">${workbookEscape(value)}</Data></Cell>`).join("")}</Row>`).join("");
+  return `<Worksheet ss:Name="${workbookEscape(name).slice(0, 31)}"><Table>${sheetRows}</Table></Worksheet>`;
+}
+function workbookRows(rows) {
+  return [["#", "Title", "Tag", "Final", "Duplicate"]].concat(rows.map(item => [
+    item.index,
+    item.title,
+    item.type,
+    item.final && !item.duplicate ? "Yes" : "No",
+    item.duplicate ? "Yes" : "No",
+  ]));
+}
+function downloadMasterWorkbook() {
+  const groups = [
+    ["Raw Data", previewItems],
+    ["How-To", previewItems.filter(item => item.bucket !== "non")],
+    ["How-To (Start)", previewItems.filter(item => item.bucket === "start")],
+    ["How-To (Board)", previewItems.filter(item => item.bucket === "board")],
+    ["How-To (Shorts)", previewItems.filter(item => item.bucket === "shorts")],
+    ["Non How-To", previewItems.filter(item => item.bucket === "non")],
+    ["Final List", previewItems.filter(item => item.final && !item.duplicate)],
+  ];
+  const xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+${groups.map(([name, rows]) => workbookSheet(name, workbookRows(rows))).join("")}
+</Workbook>`;
+  const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "master_titles.xls";
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+function titleMarkup(item) {
+  const pencilIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 8-8-4-4-8 8-2 6 6-2z"/><path d="m14 6 4 4"/></svg>`;
+  if (item.editing) {
+    return `
+      <div class="title-cell">
+        <input class="title-edit-input" value="${escapeHtml(item.title)}" onkeydown="if(event.key === 'Enter'){event.preventDefault(); saveTitleEdit(${item.index}, this.value)}">
+        <button type="button" class="mini-btn" aria-label="Save title" title="Save title" onclick="saveTitleEdit(${item.index}, this.previousElementSibling.value)">OK</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="title-cell">
+      <span>${escapeHtml(item.title)}</span>
+      <button type="button" class="mini-btn" aria-label="Edit title" title="Edit title" onclick="toggleEdit(${item.index})">${pencilIcon}</button>
+    </div>
+  `;
+}
+function actionMarkup(item) {
+  const finalLabel = item.final && !item.duplicate ? "Final" : "Add Final";
+  return `
+    <div class="row-actions">
+      <button type="button" class="icon-action" aria-label="Edit title" title="Edit title" onclick="toggleEdit(${item.index})">✎</button>
+      <button type="button" class="mini-btn tag-action" onclick="cycleType(${item.index})">Tag</button>
+      <button type="button" class="mini-btn final-action" ${item.duplicate ? "disabled" : ""} onclick="toggleFinal(${item.index}, ${item.final ? "false" : "true"})">${finalLabel}</button>
+    </div>
+  `;
+}
+function cycleType(index) {
+  const item = previewItems.find(row => row.index === index);
+  if (!item) return;
+  const current = typeOptions.findIndex(option => option.bucket === item.bucket);
+  const next = typeOptions[(current + 1 + typeOptions.length) % typeOptions.length];
+  setPreferredType(index, next.bucket);
+}
+function renderPreview() {
+  const body = document.getElementById("previewRows");
+  const rows = filteredItems();
+  renderTableHeader();
+  document.getElementById("analysisCount").textContent = rows.length;
+  document.getElementById("deleteCount").textContent = rows.length;
+  document.getElementById("copyCount").textContent = rows.length;
+  if (!rows.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="${columnOrder.length}"><div class="empty-state"><span class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M9 5v14"/></svg></span><strong>No titles in this block</strong><small>Choose another bucket or add more titles.</small></div></td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.slice(0, 250).map(item => `
+    <tr class="${item.duplicate ? "duplicate-row" : ""}">
+      ${columnOrder.map(key => renderColumnCell(key, item)).join("")}
+    </tr>
+  `).join("");
+}
+function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+}
+function highlightDuplicates() {
+  currentBucket = "raw";
+  document.querySelectorAll("[data-filter]").forEach(btn => btn.classList.remove("active"));
+  renderPreview();
+}
+function setNicheDefault(value) {
+  const input = document.getElementById("nicheInput");
+  if (input.dataset.manual === "true") return;
+  input.value = value.slice(0, 80);
+}
+function updateWorkflowState(shouldScroll = false) {
+  const fileCount = fileInput.files.length;
+  const pastedTitles = parseLines(pasteTitles.value);
+  const pastedCount = pastedTitles.length;
+  const hasInput = fileCount > 0 || pastedCount > 0;
+  document.querySelector(".wizard-page").classList.toggle("has-input", hasInput);
+  document.getElementById("getStarted").classList.toggle("is-complete", hasInput);
+  document.getElementById("inputState").textContent = hasInput ? "Titles loaded" : "Waiting for titles";
+  if (!fileCount && pastedCount) {
+    setNicheDefault(firstTitleFromPaste());
+    buildPreview(pastedTitles);
+  }
+  if (!hasInput) {
+    previewItems = [];
+    updateCounts();
+    renderPreview();
+  }
+  if (hasInput && shouldScroll) {
+    setTimeout(() => document.getElementById("toolsStep").scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+  }
+}
+function syncModelPreset() {
+  const provider = document.getElementById("providerSelect").value;
+  const preset = document.getElementById("modelPreset");
+  const current = document.getElementById("modelInput").value;
+  preset.innerHTML = "";
+  modelOptions[provider].forEach(model => {
+    const option = document.createElement("option");
+    option.value = model;
+    option.textContent = model === "custom" ? "Custom model id" : model;
+    preset.appendChild(option);
+  });
+  if (modelOptions[provider].includes(current)) {
+    preset.value = current;
+  } else {
+    preset.value = modelOptions[provider][0];
+    document.getElementById("modelInput").value = preset.value;
+  }
+}
+function saveDefaultSettings() {
+  if (!document.getElementById("saveDefaults").checked) return;
+  localStorage.setItem("titlebanker-provider", document.getElementById("providerSelect").value);
+  localStorage.setItem("titlebanker-model", document.getElementById("modelInput").value);
+}
+function loadDefaultSettings() {
+  const provider = localStorage.getItem("titlebanker-provider");
+  const model = localStorage.getItem("titlebanker-model");
+  if (provider && modelOptions[provider]) document.getElementById("providerSelect").value = provider;
+  syncModelPreset();
+  if (model) document.getElementById("modelInput").value = model;
+}
+
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+const dropText = document.getElementById("dropText");
+const pasteTitles = document.getElementById("pasteTitles");
+const nicheInput = document.getElementById("nicheInput");
+
+nicheInput.addEventListener("input", () => nicheInput.dataset.manual = "true");
+pasteTitles.addEventListener("input", () => updateWorkflowState(true));
+document.getElementById("providerSelect").addEventListener("change", () => {
+  syncModelPreset();
+  saveDefaultSettings();
+});
+document.getElementById("modelPreset").addEventListener("change", event => {
+  if (event.target.value !== "custom") document.getElementById("modelInput").value = event.target.value;
+  saveDefaultSettings();
+});
+document.getElementById("modelInput").addEventListener("input", saveDefaultSettings);
+
+["dragenter", "dragover"].forEach(eventName => {
+  dropZone.addEventListener(eventName, event => {
+    event.preventDefault();
+    dropZone.classList.add("dragging");
+  });
+});
+["dragleave", "drop"].forEach(eventName => {
+  dropZone.addEventListener(eventName, event => {
+    event.preventDefault();
+    dropZone.classList.remove("dragging");
+  });
+});
+dropZone.addEventListener("drop", event => {
+  const files = event.dataTransfer.files;
+  if (!files.length) return;
+  fileInput.files = files;
+  dropText.textContent = files[0].name;
+  setNicheDefault(titleFromFilename(files[0].name));
+  previewFile(files[0]);
+  updateWorkflowState(true);
+});
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length) {
+    dropText.textContent = fileInput.files[0].name;
+    setNicheDefault(titleFromFilename(fileInput.files[0].name));
+    previewFile(fileInput.files[0]);
+  } else {
+    dropText.textContent = "Drop your title file here";
+  }
+  updateWorkflowState(true);
+});
+function previewFile(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    previewUploadedFile(file);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = event => buildPreview(parseTextFile(String(event.target.result || ""), file.name));
+  reader.readAsText(file);
+}
+async function previewUploadedFile(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const response = await fetch("/preview-upload", {
+      method: "POST",
+      body: formData,
+    });
+    if (!response.ok) throw new Error("Preview failed");
+    const data = await response.json();
+    buildPreview(Array.isArray(data.titles) ? data.titles : []);
+  } catch (error) {
+    previewItems = [];
+    updateCounts();
+    renderPreview();
+    document.getElementById("inputState").textContent = "Could not preview file";
+  }
+}
+document.getElementById("uploadForm").addEventListener("reset", () => {
+  setTimeout(() => {
+    dropText.textContent = "Drop your title file here";
+    nicheInput.dataset.manual = "";
+    previewItems = [];
+    updateWorkflowState(false);
+  }, 0);
+});
+document.getElementById("uploadForm").addEventListener("submit", syncSelectedPayload);
+
+loadDefaultSettings();
+setPhaseMode("auto");
+updateWorkflowState(false);
+</script>
+
+{% endblock %}

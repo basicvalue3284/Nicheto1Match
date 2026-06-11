@@ -1,0 +1,1504 @@
+{% extends "base.html" %}
+{% block title %}{{ job.niche }} · Keyword Wizard{% endblock %}
+{% block content %}
+
+<div class="tool-shell">
+  <aside class="steps-panel">
+    <div class="steps-title">STEPS</div>
+    <div class="step-row done">
+      <span>📤 Upload & Preview</span>
+      <strong class="step-pill done">Uploaded</strong>
+    </div>
+    <div class="step-row {% if job.state in ['QUEUED','RUNNING'] %}active{% elif job.policy_checked_count > 0 %}done{% endif %}">
+      <span>✨ Extract & Policy</span>
+      {% if job.state in ['QUEUED','RUNNING'] %}
+        <strong class="step-pill active">Processing</strong>
+      {% elif job.policy_checked_count > 0 %}
+        <strong class="step-pill done">Checked</strong>
+      {% else %}
+        <strong class="step-pill idle">Not run</strong>
+      {% endif %}
+    </div>
+    <div class="step-row {% if job.ready_count > 0 %}active{% endif %}">
+      <span>📥 Start scraping</span>
+      {% if job.ready_count > 0 %}
+        <strong class="step-pill done">Export ready</strong>
+      {% else %}
+        <strong class="step-pill idle">Waiting</strong>
+      {% endif %}
+    </div>
+  </aside>
+
+  <section class="tool-main">
+    <header class="tool-header">
+      <div class="title-wrap">
+        <span class="menu-mark">≡</span>
+        <h1>Step 2: Extract & Policy checker</h1>
+      </div>
+      <div class="header-actions">
+        {% set ai_key_available = has_gemini_key if job.provider == 'gemini' else has_server_key %}
+        <span class="api-status-pill {% if ai_key_available %}ok{% else %}bad{% endif %}" title="{% if ai_key_available %}{{ job.provider|upper }} API key is saved and available for Step 2.{% else %}Add {{ job.provider|upper }} API key in Settings before Step 2 can run.{% endif %}">
+          <span></span>
+          {{ job.provider|upper }} API
+        </span>
+        <button type="button" class="ghost-link icon-back-link" onclick="history.back()" title="Back to Tools & Filter" aria-label="Back to Tools & Filter">←</button>
+        <button type="button" class="icon-btn" onclick="openSettings()">⚙️</button>
+      </div>
+    </header>
+
+    <nav class="workflow-nav" aria-label="Workflow steps">
+      <a class="workflow-step done" href="/jobs/{{ job.id }}#step1-work" onclick="scrollWorkflowTarget('step1-work')">
+        <span>1</span>
+        <strong>Tools & Filter</strong>
+      </a>
+      <a class="workflow-step active" href="/jobs/{{ job.id }}#step2-work" onclick="scrollWorkflowTarget('step2-work')">
+        <span>2</span>
+        <strong>Extract & Policy</strong>
+      </a>
+      {% if existing_scrape %}
+      <a class="workflow-step {% if job.ready_count > 0 %}done{% endif %}" href="/scraper/jobs/{{ existing_scrape.id }}">
+        <span>3</span>
+        <strong>Title Scraper</strong>
+      </a>
+      {% else %}
+      <span class="workflow-step muted">
+        <span>3</span>
+        <strong>Title Scraper</strong>
+      </span>
+      {% endif %}
+    </nav>
+
+    {% set start_count = job.rows|selectattr('type', 'equalto', 'How-To (Start)')|list|length %}
+    {% set board_count = job.rows|selectattr('type', 'equalto', 'How-To (Board)')|list|length %}
+    {% set shorts_count = job.rows|selectattr('type', 'equalto', 'How-To (Shorts)')|list|length %}
+    {% set non_count = job.rows|selectattr('type', 'equalto', 'Non How-To')|list|length %}
+    {% set howto_count = start_count + board_count + shorts_count %}
+    <details id="step1-work" class="saved-step-card">
+      <summary class="saved-step-head">
+        <div>
+          <span class="summary-label">Step 1</span>
+          <h2>Tools & Filter</h2>
+        </div>
+        <div class="step-mini-stats">
+          <strong>{{ job.raw_count }}</strong><span>uploaded</span>
+          <strong>{{ job.total }}</strong><span>unique</span>
+          <strong>{{ job.final_count }}</strong><span>final</span>
+        </div>
+      </summary>
+
+      <div class="step1-filter-row">
+        <button class="step1-filter active" data-step1-filter="final" onclick="setStep1Filter('final', this)">Final List ({{ job.final_count }})</button>
+        <button class="step1-filter" data-step1-filter="raw" onclick="setStep1Filter('raw', this)">Raw List ({{ job.total }})</button>
+        <button class="step1-filter" data-step1-filter="howto" onclick="setStep1Filter('howto', this)">How-To ({{ howto_count }})</button>
+        <button class="step1-filter" data-step1-filter="How-To (Start)" onclick="setStep1Filter('How-To (Start)', this)">How-To Start ({{ start_count }})</button>
+        <button class="step1-filter" data-step1-filter="How-To (Board)" onclick="setStep1Filter('How-To (Board)', this)">How-To Board ({{ board_count }})</button>
+        <button class="step1-filter" data-step1-filter="How-To (Shorts)" onclick="setStep1Filter('How-To (Shorts)', this)">Shorts ({{ shorts_count }})</button>
+        <button class="step1-filter" data-step1-filter="Non How-To" onclick="setStep1Filter('Non How-To', this)">Non How-To ({{ non_count }})</button>
+      </div>
+
+      <div class="step1-actions">
+        <input id="step1Search" type="search" placeholder="Search Step 1 titles..." oninput="applyStep1Filters()">
+        <form action="/jobs/{{ job.id }}/selection/bulk" method="post">
+          <button class="mini-btn" name="action" value="select_how_to" type="submit">Reset final to How-To Start + Board</button>
+          <button class="mini-btn" name="action" value="select_all" type="submit">Select all final</button>
+          <button class="mini-btn" name="action" value="clear_all" type="submit">Clear final</button>
+        </form>
+      </div>
+
+      <div class="step1-table-wrap">
+        <table class="step1-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Final</th>
+              <th>Title</th>
+              <th>Tag</th>
+              <th>Step 2 Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in job.rows %}
+            <tr class="step1-row"
+                data-type="{{ r.type }}"
+                data-final="{{ 'true' if r.include_final else 'false' }}"
+                data-search="{{ (r.original_title ~ ' ' ~ r.type ~ ' ' ~ r.status)|lower }}">
+              <td>{{ loop.index }}</td>
+              <td>
+                       <input type="checkbox"
+                       {% if r.include_final %}checked{% endif %}
+                       onchange="updateStep1Selection({{ r.index }}, this.checked, this)">
+              </td>
+              <td class="step1-title">{{ r.original_title }}</td>
+              <td>
+                <form action="/jobs/{{ job.id }}/row" method="post">
+                  <input type="hidden" name="row_index" value="{{ r.index }}">
+                  <select name="row_type" class="tag-select" onchange="this.form.submit()">
+                    <option value="How-To (Start)" {% if r.type == 'How-To (Start)' %}selected{% endif %}>How-To (Start)</option>
+                    <option value="How-To (Board)" {% if r.type == 'How-To (Board)' %}selected{% endif %}>How-To (Board)</option>
+                    <option value="How-To (Shorts)" {% if r.type == 'How-To (Shorts)' %}selected{% endif %}>How-To (Shorts)</option>
+                    <option value="Non How-To" {% if r.type == 'Non How-To' %}selected{% endif %}>Non How-To</option>
+                  </select>
+                </form>
+              </td>
+              <td>{{ r.status }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    {% set ready_pct = (job.ready_count * 100 / job.final_count) if job.final_count else 0 %}
+    {% set review_count = job.final_count - job.ready_count %}
+    <div class="preview-top" id="step2-work">
+      <form class="step3-top-form" action="/jobs/{{ job.id }}/start-scraper" method="post">
+        <button class="primary-link button-link step3-link step3-prominent" type="submit">Resume Step 3: Start Title Scraping</button>
+      </form>
+      <div class="chip-line policy-line">
+        <span class="filter-label">Policy</span>
+        <button class="policy-chip active" onclick="setPolicyFilter('all', this)">All</button>
+        <button class="policy-chip" onclick="setPolicyFilter('PENDING', this)">Pending</button>
+        <button class="policy-chip" onclick="setPolicyFilter('SAFE', this)">Safe ({{ job.safe_count }})</button>
+        <button class="policy-chip" onclick="setPolicyFilter('RISKY', this)">Risky ({{ job.risky_count }})</button>
+        <button class="policy-chip" onclick="setPolicyFilter('PROHIBITED', this)">Prohibited ({{ job.prohibited_count }})</button>
+        <button class="policy-chip" onclick="setPolicyFilter('ERROR', this)">Errors ({{ job.failed }})</button>
+        <button class="policy-chip review-chip" onclick="showNeedsReview(this)">Needs Review ({{ review_count }})</button>
+      </div>
+
+      <div class="control-line">
+        <div class="run-actions">
+          <form id="automationForm" action="/jobs/{{ job.id }}/automation" method="post" class="run-form" onsubmit="return guardRunKey(this)">
+            <button class="primary-btn automation-btn" type="submit">Run Full Automation</button>
+            <label class="threshold-control">Continue at
+              <input type="number" name="threshold_pct" value="95" min="50" max="100" step="1">%
+            </label>
+            <label class="pause-control" title="Run extraction and policy, then stop before Step 3 until you resume.">
+              <input type="checkbox" name="pause_before_step3" value="true"> ⏸ Review before Step 3
+            </label>
+            <a class="mini-link inline-download" href="/jobs/{{ job.id }}/download?kind=master">Download Master Sheet</a>
+          </form>
+          <form id="runForm" action="/jobs/{{ job.id }}/run" method="post" class="hidden-run-form" onsubmit="return guardRunKey(this)"></form>
+        </div>
+      </div>
+
+      <div class="automation-summary">
+        <div>
+          <span class="summary-label">Automation readiness</span>
+          <strong>{{ '%.0f'|format(ready_pct) }}%</strong>
+          <span>{{ job.ready_count }} ready / {{ job.final_count }} final</span>
+        </div>
+        <div>
+          <span class="summary-label">Review queue</span>
+          <strong>{{ review_count }}</strong>
+          <span>pending, risky, prohibited, or error rows</span>
+        </div>
+        <div>
+          <span class="summary-label">Extraction mode</span>
+          <strong>Strict</strong>
+          <span>remove/cut only, no added words</span>
+        </div>
+      </div>
+
+      <div class="progress-line">
+        <span id="stateLabel">{{ job.state }}</span>
+        <div class="progress-track"><div id="progressBar" style="width: {{ job.progress_pct }}%"></div></div>
+        <span><b id="processedCount">{{ job.processed }}</b> / {{ job.final_count }} final processed</span>
+        <small id="jobMessage">{% if 'OPENAI_API_KEY' not in job.message and 'GEMINI_API_KEY' not in job.message and 'one-time key' not in job.message %}{{ job.message }}{% endif %}</small>
+      </div>
+      <div class="export-line">
+        <a class="mini-link" href="/jobs/{{ job.id }}/download?kind=ready">Download SAFE Titles</a>
+        <form id="bulkRowsForm" action="/jobs/{{ job.id }}/rows/bulk" method="post" onsubmit="return syncBulkRows(this)">
+          <input type="hidden" name="selected_rows" id="selectedRowsInput">
+          <button class="mini-btn bulk-action-btn" type="submit" name="action" value="mark_safe">Mark selected SAFE</button>
+          <button class="mini-btn bulk-action-btn" type="submit" name="action" value="regenerate">Regenerate selected</button>
+          <button class="mini-btn bulk-action-btn" type="submit" name="action" value="move_step3">Move selected to Step 3</button>
+        </form>
+      </div>
+      <details class="advanced-filter">
+        <summary>Advanced filter</summary>
+        <div class="advanced-grid">
+          <form action="/jobs/{{ job.id }}/run" method="post" onsubmit="return guardRunKey(this)">
+            <button class="mini-btn" type="submit" name="run_mode" value="test_25">Test 25</button>
+          </form>
+          <form action="/jobs/{{ job.id }}/run" method="post" onsubmit="return guardRunKey(this)">
+            <button class="mini-btn" type="submit" name="run_mode" value="retry_pending">Retry Pending</button>
+          </form>
+          <button class="mini-btn" type="button" onclick="showFailed()">Show failed</button>
+          <form action="/jobs/{{ job.id }}/run" method="post" onsubmit="return guardRunKey(this)">
+            <button class="mini-btn" type="submit" name="run_mode" value="retry_failed">Regenerate Errors with AI</button>
+          </form>
+          <form action="/jobs/{{ job.id }}/run" method="post" onsubmit="return guardRunKey(this)">
+            <button class="mini-btn" type="submit" name="run_mode" value="reprocess_all">Reprocess All</button>
+          </form>
+          <button class="mini-btn" type="button" onclick="openSettings()">Provider / model / batch / detailed rules</button>
+        </div>
+      </details>
+      <div id="validationBox" class="validation-box {% if job.export_blockers %}warn{% else %}ok{% endif %}">
+        {% if job.export_blockers %}
+          Final export blocked: {{ job.export_blockers|join(' ') }}
+        {% else %}
+          Final export ready. {{ job.ready_count }} SAFE / DO titles available.
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="table-pad">
+      <table class="banker-table">
+        <thead>
+          <tr id="resultHeader">
+            <th class="col-select" draggable="false" data-column="select"><input type="checkbox" onchange="toggleVisibleJobRows(this.checked)"></th>
+            <th class="col-num" draggable="false" data-column="num">#<span class="resize-handle" data-column="num"></span></th>
+            <th class="col-title" draggable="true" data-column="title">Title<button type="button" class="column-menu-btn" onclick="openResultColumnMenu(event, 'title')">⋮</button><span class="resize-handle" data-column="title"></span></th>
+            <th class="col-extraction" draggable="true" data-column="extraction">Title Extraction<button type="button" class="column-menu-btn" onclick="openResultColumnMenu(event, 'extraction')">⋮</button><span class="resize-handle" data-column="extraction"></span></th>
+            <th class="col-removed" draggable="true" data-column="removed">Removed Text<button type="button" class="column-menu-btn" onclick="openResultColumnMenu(event, 'removed')">⋮</button><span class="resize-handle" data-column="removed"></span></th>
+            <th class="col-tag" draggable="true" data-column="tag">Tag<button type="button" class="column-menu-btn" onclick="openResultColumnMenu(event, 'tag')">⋮</button><span class="resize-handle" data-column="tag"></span></th>
+            <th class="col-policy" draggable="true" data-column="policy">Policy<button type="button" class="column-menu-btn" onclick="openResultColumnMenu(event, 'policy')">⋮</button><span class="resize-handle" data-column="policy"></span></th>
+            <th class="col-reason reason-col" draggable="true" data-column="reason">Reason Notes<button type="button" class="column-menu-btn" onclick="openResultColumnMenu(event, 'reason')">⋮</button><span class="resize-handle" data-column="reason"></span></th>
+            <th class="col-actions" draggable="true" data-column="actions">Actions<button type="button" class="column-menu-btn" onclick="openResultColumnMenu(event, 'actions')">⋮</button><span class="resize-handle" data-column="actions"></span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(rownum=0) %}
+          {% for r in job.rows %}
+          {% if r.include_final %}
+          {% set ns.rownum = ns.rownum + 1 %}
+          <tr class="result-row"
+              data-index="{{ r.index }}"
+              data-type="{{ r.type }}"
+              data-final="{{ 'true' if r.include_final else 'false' }}"
+              data-extracted="{{ 'true' if r.cleaned_title else 'false' }}"
+              data-policy="{{ r.status }}"
+              data-decision="{{ r.decision }}"
+              data-search="{{ (r.original_title ~ ' ' ~ r.cleaned_title ~ ' ' ~ r.reason)|lower }}">
+            <td class="col-select"><input class="job-row-check" type="checkbox" value="{{ r.index }}"></td>
+            <td class="col-num">{{ ns.rownum }}</td>
+            <td class="title-cell col-title">{{ r.original_title }}</td>
+            <td class="col-extraction">
+              <form action="/jobs/{{ job.id }}/row" method="post" class="extraction-edit-form">
+                <input type="hidden" name="row_index" value="{{ r.index }}">
+                <input class="extract-input" name="manual_extraction" value="{{ r.cleaned_title }}" placeholder="Needs extraction..." onchange="this.form.submit()">
+              </form>
+            </td>
+            <td class="col-removed">
+              {{ r.removed_words|join(', ') if r.removed_words else '-' }}
+            </td>
+            <td class="col-tag">
+              <form action="/jobs/{{ job.id }}/row" method="post">
+                <input type="hidden" name="row_index" value="{{ r.index }}">
+                <select name="row_type" class="tag-select" onchange="this.form.submit()">
+                  <option value="How-To (Start)" {% if r.type == 'How-To (Start)' %}selected{% endif %}>How-To (Start)</option>
+                  <option value="How-To (Board)" {% if r.type == 'How-To (Board)' %}selected{% endif %}>How-To (Board)</option>
+                  <option value="How-To (Shorts)" {% if r.type == 'How-To (Shorts)' %}selected{% endif %}>How-To (Shorts)</option>
+                  <option value="Non How-To" {% if r.type == 'Non How-To' %}selected{% endif %}>Non How-To</option>
+                </select>
+              </form>
+            </td>
+            <td class="col-policy">
+              {% set status_class = 'status-pending' %}
+              {% if r.status == 'SAFE' %}{% set status_class = 'status-safe' %}{% endif %}
+              {% if r.status == 'RISKY' %}{% set status_class = 'status-risky' %}{% endif %}
+              {% if r.status == 'PROHIBITED' %}{% set status_class = 'status-prohibited' %}{% endif %}
+              {% if r.status == 'ERROR' %}{% set status_class = 'status-error' %}{% endif %}
+              <form action="/jobs/{{ job.id }}/row" method="post" class="policy-edit-form">
+                <input type="hidden" name="row_index" value="{{ r.index }}">
+                <select name="manual_policy" class="{{ status_class }} policy-select" onchange="this.form.submit()">
+                  <option value="PENDING" {% if r.status == 'PENDING' %}selected{% endif %}>PENDING</option>
+                  <option value="SAFE" {% if r.status == 'SAFE' %}selected{% endif %}>SAFE</option>
+                  <option value="RISKY" {% if r.status == 'RISKY' %}selected{% endif %}>RISKY</option>
+                  <option value="PROHIBITED" {% if r.status == 'PROHIBITED' %}selected{% endif %}>PROHIBITED</option>
+                  <option value="ERROR" {% if r.status == 'ERROR' %}selected{% endif %}>ERROR</option>
+                </select>
+              </form>
+            </td>
+            <td class="col-reason reason-col">
+              <input class="reason-input" value="{{ r.error or r.reason }}" placeholder="reason..." readonly>
+            </td>
+            <td class="col-actions actions-cell">
+              <form action="/jobs/{{ job.id }}/row/regenerate" method="post" onsubmit="return guardRunKey(this)">
+                <input type="hidden" name="row_index" value="{{ r.index }}">
+                <button class="tiny-action icon-only-action" type="submit" title="Regenerate" aria-label="Regenerate">↻</button>
+              </form>
+              <form action="/jobs/{{ job.id }}/row" method="post">
+                <input type="hidden" name="row_index" value="{{ r.index }}">
+                <input type="hidden" name="manual_ready" value="true">
+                <button class="tiny-action final-action" type="submit">Move to Step 3</button>
+              </form>
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="table-foot">
+        <span>Showing <span id="visibleCount">{{ job.final_count }}</span> of {{ job.final_count }} final titles</span>
+        <div class="pager">
+          <button class="mini-btn" type="button" onclick="prevPage()">Prev</button>
+          <span>Page <b id="pageNumber">1</b> / <span id="pageTotal">1</span></span>
+          <button class="mini-btn" type="button" onclick="nextPage()">Next</button>
+          <select id="pageSize" onchange="changePageSize(this.value)">
+            <option value="50">50 rows</option>
+            <option value="100" selected>100 rows</option>
+            <option value="200">200 rows</option>
+            <option value="500">500 rows</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <details class="run-log">
+      <summary>Run log</summary>
+      <ol id="runLog">
+        {% for item in job.logs[-20:] %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ol>
+    </details>
+
+    <div id="settingsPanel" class="settings-panel" aria-hidden="true">
+      <div class="settings-card">
+        <div class="settings-head">
+          <h2>Settings</h2>
+          <button type="button" class="icon-btn" onclick="closeSettings()">×</button>
+        </div>
+        <div class="settings-body">
+          <p class="settings-note">Prompts and examples are saved when the job is created. Start a new run to change them for a different niche.</p>
+          <label>Model</label>
+          <select disabled>
+            <option>{{ job.provider|default('openai') }}</option>
+          </select>
+          <label>Model id</label>
+          <input type="text" value="{{ job.model }}" readonly>
+          <label>Batch size</label>
+          <input type="text" value="{{ job.batch_size }}" readonly>
+          <label>OpenAI key</label>
+          <input id="providerKeyInput" form="runForm" type="password" name="one_time_openai_key" placeholder="{% if has_server_key %}Saved{% else %}Paste key once and save{% endif %}">
+          <label>Gemini key</label>
+          <input form="runForm" type="password" name="one_time_gemini_key" placeholder="{% if has_gemini_key %}Saved{% else %}Optional Gemini key{% endif %}">
+          <label>RapidAPI key</label>
+          <input form="runForm" type="password" name="rapidapi_key" placeholder="{% if has_rapidapi_key %}Saved{% else %}Paste key once and save{% endif %}">
+          <button type="submit" class="primary-btn" form="runForm" formaction="/settings/all" formmethod="post">Save API Keys</button>
+          <label>Policy prompt</label>
+          <textarea rows="14" readonly>{{ job.policy_prompt }}</textarea>
+          <label>Extraction title rules / examples</label>
+          <div class="examples-table-wrap">
+            <table class="examples-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Before (raw title)</th>
+                  <th>After (cleaned title)</th>
+                  <th>Notes / Tag</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ex in job.cleaning_examples %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>{{ ex.before }}</td>
+                  <td>{{ ex.after }}</td>
+                  <td>{{ ex.notes }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<style>
+  .tool-shell {
+    min-height: 100vh;
+    display: block;
+    background: #fafafa;
+    padding: 22px 20px 24px;
+    zoom: .8;
+  }
+  .steps-panel {
+    display: none;
+  }
+  .tool-main {
+    width: min(1680px, 100%);
+    margin: 0 auto;
+    background: #fafafa;
+  }
+  .tool-header {
+    height: auto;
+    padding: 0;
+    margin-bottom: 12px;
+    border: 0;
+    background: transparent;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .api-status-pill {
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid #e0e3ea;
+    border-radius: 999px;
+    background: #fff;
+    color: #4a4e58;
+    padding: 0 10px;
+    font-size: 10px;
+    font-weight: 850;
+  }
+  .api-status-pill span {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    box-shadow: 0 0 0 3px rgba(0,0,0,.04);
+  }
+  .api-status-pill.ok {
+    border-color: #bbebc9;
+    background: #f0fbf4;
+    color: #24733c;
+  }
+  .api-status-pill.ok span {
+    background: #22c55e;
+  }
+  .api-status-pill.bad {
+    border-color: #fecaca;
+    background: #fff1f2;
+    color: #b42318;
+  }
+  .api-status-pill.bad span {
+    background: #ef4444;
+  }
+  .workflow-nav {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 0 0 14px;
+    padding: 8px;
+    border: 1px solid #e6e8ef;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .workflow-step {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #e3e5ec;
+    border-radius: 7px;
+    background: #fbfbfd;
+    color: #4b515e;
+    padding: 0 12px;
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .workflow-step span {
+    width: 21px;
+    height: 21px;
+    display: grid;
+    place-items: center;
+    border-radius: 99px;
+    background: #eef0f5;
+    font-size: 10px;
+  }
+  .workflow-step.done {
+    border-color: #ccebd7;
+    background: #f0fbf4;
+    color: #24733c;
+  }
+  .workflow-step.active {
+    border-color: #d4d0ff;
+    background: #eeeaff;
+    color: #5d52dc;
+  }
+  .workflow-step.muted {
+    opacity: .6;
+  }
+  .saved-step-card {
+    margin: 0 0 14px;
+    border: 1px solid #e8e9ee;
+    border-radius: 8px;
+    background: #fff;
+    padding: 14px;
+  }
+  .saved-step-card:not([open]) {
+    padding-bottom: 8px;
+  }
+  .saved-step-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    list-style: none;
+  }
+  .saved-step-card:not([open]) .saved-step-head {
+    margin-bottom: 0;
+  }
+  .saved-step-head::-webkit-details-marker {
+    display: none;
+  }
+  .saved-step-head h2 {
+    margin: 4px 0 0;
+    color: #202124;
+    font-size: 20px;
+    font-weight: 820;
+  }
+  .step-mini-stats {
+    display: grid;
+    grid-template-columns: repeat(3, auto auto);
+    align-items: baseline;
+    gap: 4px 8px;
+    color: #707682;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .step-mini-stats strong {
+    color: #202124;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .step1-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .step1-filter {
+    min-height: 30px;
+    border: 1px solid #e0e3ea;
+    border-radius: 6px;
+    background: #fff;
+    color: #4a4e58;
+    padding: 0 10px;
+    font-size: 10px;
+    font-weight: 750;
+  }
+  .step1-filter.active {
+    border-color: #d4d0ff;
+    background: #eeeaff;
+    color: #5d52dc;
+  }
+  .step1-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .step1-actions input {
+    width: min(360px, 100%);
+    height: 30px;
+    border: 1px solid #e0e3ea;
+    border-radius: 6px;
+    background: #fff;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+  .step1-actions form {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .step1-table-wrap {
+    max-height: 330px;
+    overflow: auto;
+    border: 1px solid #eceef3;
+    border-radius: 7px;
+  }
+  .step1-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10.5px;
+  }
+  .step1-table th,
+  .step1-table td {
+    border-bottom: 1px solid #f0f1f5;
+    padding: 6px 9px;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .step1-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8f9fc;
+    color: #747986;
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+  .step1-title {
+    min-width: 420px;
+    color: #3f4450;
+  }
+  .step1-table input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #7167e8;
+  }
+  .workflow-focus {
+    outline: 3px solid rgba(113, 103, 232, .18);
+    outline-offset: 4px;
+  }
+  .title-wrap {
+    display: block;
+  }
+  .menu-mark {
+    display: none;
+  }
+  .menu-mark::before {
+    content: "";
+  }
+  .menu-mark {
+    font-size: 0;
+  }
+  .title-wrap h1 {
+    margin-top: 7px;
+    color: #202124;
+    font-size: 24px;
+    font-weight: 760;
+  }
+  .ghost-link,
+  .icon-btn,
+  .mini-btn,
+  .primary-btn,
+  .mini-link,
+  .chip,
+  .policy-chip,
+  .phase-card,
+  .validation-box,
+  .banker-table,
+  .run-log {
+    border-radius: 6px;
+  }
+  .preview-top,
+  .table-pad,
+  .run-log {
+    width: 100%;
+  }
+  .preview-top {
+    position: relative;
+    border: 1px solid #e8e9ee;
+    border-radius: 8px;
+    background: #fff;
+    padding: 14px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 2px rgba(20, 20, 20, .03);
+  }
+  .phase-dashboard {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .chip.active,
+  .policy-chip.active,
+  .primary-btn {
+    border-color: #d2cdff;
+    background: #eeeaff;
+    color: #5d52dc;
+  }
+  .progress-track div {
+    background: #7167e8;
+  }
+  .export-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .step3-top-form {
+    position: absolute;
+    right: 14px;
+    top: 12px;
+  }
+  .step3-prominent {
+    min-height: 38px;
+    border-color: #a7ddb9;
+    background: #dcf7e5;
+    color: #1d6b36;
+    padding: 0 16px;
+    font-size: 12px;
+    box-shadow: 0 4px 14px rgba(36, 115, 60, .12);
+  }
+  .policy-line {
+    padding-right: 260px;
+  }
+  .primary-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    border: 1px solid #d2cdff;
+    border-radius: 6px;
+    background: #eeeaff;
+    color: #5d52dc;
+    padding: 0 10px;
+    font-size: 10px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+  .primary-link.step3-link,
+  .send-step-btn {
+    border-color: #bfe8cf;
+    background: #eaf8ef;
+    color: #24733c;
+  }
+  .button-link {
+    cursor: pointer;
+    font: inherit;
+  }
+  .run-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+  .run-form {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .hidden-run-form {
+    display: none;
+  }
+  .run-form input {
+    width: 180px;
+  }
+  .run-form .primary-btn {
+    flex: 1 1 220px;
+  }
+  .automation-btn {
+    min-height: 34px;
+    font-size: 12px;
+  }
+  .threshold-control {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #e4e6ec;
+    border-radius: 6px;
+    background: #fff;
+    padding: 0 9px;
+    color: #565b66;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pause-control {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #e4e6ec;
+    border-radius: 6px;
+    background: #fff;
+    padding: 0 9px;
+    color: #565b66;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pause-control input {
+    accent-color: #7167e8;
+  }
+  .threshold-control input {
+    width: 48px;
+    min-height: 24px;
+    border: 1px solid #dcdfe7;
+    border-radius: 5px;
+    padding: 0 5px;
+    font-size: 11px;
+    text-align: center;
+  }
+  .automation-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .automation-summary > div {
+    min-height: 54px;
+    border: 1px solid #e8e9ee;
+    border-radius: 7px;
+    background: #fbfbfd;
+    padding: 8px 10px;
+    display: grid;
+    gap: 2px;
+  }
+  .automation-summary strong {
+    color: #202124;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .automation-summary span {
+    color: #707682;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .automation-summary .summary-label {
+    color: #5d52dc;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-weight: 800;
+  }
+  .advanced-filter {
+    margin-top: 8px;
+    border: 1px solid #eceef3;
+    border-radius: 7px;
+    background: #fcfcfd;
+    padding: 7px 9px;
+  }
+  .advanced-filter summary {
+    cursor: pointer;
+    color: #616672;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .advanced-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 8px;
+  }
+  .advanced-grid form {
+    display: inline-flex;
+  }
+  .icon-back-link {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    font-size: 17px;
+  }
+  .inline-download {
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .progress-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-left: auto;
+  }
+  .table-pad {
+    padding: 0;
+  }
+  .banker-table {
+    border-color: #e8e9ee;
+    background: #fff;
+    font-size: 11px;
+    box-shadow: 0 1px 2px rgba(20, 20, 20, .03);
+  }
+  .banker-table th {
+    background: #fff;
+    color: #8a8e99;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    position: relative;
+    user-select: none;
+  }
+  .banker-table th[draggable="true"] {
+    cursor: grab;
+  }
+  .banker-table th.drag-over {
+    background: #f2f0ff;
+    color: #5d52dc;
+  }
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 7px;
+    height: 100%;
+    cursor: col-resize;
+  }
+  .resize-handle:hover {
+    background: #d8d4ff;
+  }
+  .col-num {
+    width: 52px;
+    min-width: 52px;
+    text-align: center !important;
+    color: #8a8e99;
+  }
+  .col-select {
+    width: 42px;
+    min-width: 42px;
+    text-align: center !important;
+  }
+  .job-row-check,
+  .col-select input {
+    width: 13px;
+    height: 13px;
+    accent-color: #7167e8;
+  }
+  .col-title {
+    min-width: 360px;
+  }
+  .col-extraction {
+    min-width: 340px;
+  }
+  .col-removed {
+    min-width: 220px;
+  }
+  .col-tag,
+  .col-policy {
+    min-width: 140px;
+  }
+  .col-reason {
+    min-width: 260px;
+  }
+  .col-actions {
+    min-width: 150px;
+  }
+  .bulk-action-btn {
+    width: auto;
+    min-width: max-content;
+    padding: 0 10px;
+  }
+  #bulkRowsForm {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .export-line form:last-child {
+    margin-left: auto;
+  }
+  .column-menu-btn {
+    float: right;
+    width: 22px;
+    height: 22px;
+    border: 1px solid #e5e7ed;
+    border-radius: 5px;
+    background: #fff;
+    color: #727783;
+    line-height: 1;
+  }
+  .column-menu {
+    position: fixed;
+    z-index: 100;
+    width: 180px;
+    border: 1px solid #e2e4eb;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(20, 20, 20, .14);
+    padding: 6px;
+  }
+  .column-menu button {
+    width: 100%;
+    min-height: 31px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    text-align: left;
+    color: #3f4450;
+    font-size: 12px;
+    padding: 0 9px;
+  }
+  .column-menu button:hover {
+    background: #f5f6fa;
+  }
+  body:not(.show-risky-reasons) .reason-col {
+    display: none;
+  }
+  .tag-select {
+    min-height: 28px;
+    min-width: 132px;
+    border: 1px solid #e1ddff;
+    border-radius: 5px;
+    background: #f7f5ff;
+    color: #5d52dc;
+    padding: 0 7px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .actions-cell {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    white-space: nowrap;
+  }
+  .icon-only-action {
+    width: 28px;
+    min-width: 28px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .extract-input,
+  .reason-input,
+  .decision-select {
+    border-color: #e5e7ed;
+    background: #fff;
+  }
+  .policy-edit-form {
+    margin: 0;
+  }
+  .policy-select {
+    min-height: 26px;
+    min-width: 116px;
+    border: 0;
+    border-radius: 5px;
+    padding: 0 7px;
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .extraction-edit-form {
+    margin: 0;
+  }
+  .extract-input {
+    width: 100%;
+  }
+  .extract-input:focus {
+    outline: 2px solid #dcd8ff;
+    border-color: #aaa3ff;
+  }
+  .examples-table-wrap {
+    max-height: 360px;
+    overflow: auto;
+    border: 1px solid #e8e9ee;
+    border-radius: 6px;
+    background: #fff;
+  }
+  .examples-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+  }
+  .examples-table th,
+  .examples-table td {
+    border-bottom: 1px solid #eceef3;
+    padding: 7px 8px;
+    vertical-align: top;
+    text-align: left;
+  }
+  .examples-table th {
+    position: sticky;
+    top: 0;
+    background: #f7f8fb;
+    color: #575b66;
+    font-weight: 800;
+    z-index: 1;
+  }
+  .examples-table td:first-child,
+  .examples-table th:first-child {
+    width: 36px;
+    text-align: center;
+    color: #7a7f8c;
+  }
+</style>
+
+<script>
+let typeFilter = "all";
+let policyFilter = "all";
+let phaseFilter = "all";
+let step1Filter = "final";
+let currentPage = 1;
+let pageSize = 100;
+let filteredRows = [];
+let draggingColumn = "";
+let resizingColumn = null;
+const columnWidths = {};
+const hasProviderKey = {{ 'true' if (job.provider == 'gemini' and has_gemini_key) or (job.provider != 'gemini' and has_server_key) else 'false' }};
+const providerKeyName = "{{ 'GEMINI_API_KEY' if job.provider == 'gemini' else 'OPENAI_API_KEY' }}";
+const appBaseUrl = `${window.location.protocol}//${window.location.host}`;
+
+function openSettings() {
+  document.getElementById("settingsPanel").classList.add("open");
+}
+function closeSettings() {
+  document.getElementById("settingsPanel").classList.remove("open");
+}
+function setStep1Filter(value, btn) {
+  step1Filter = value;
+  document.querySelectorAll(".step1-filter").forEach(item => item.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  applyStep1Filters();
+}
+function step1Matches(row) {
+  if (step1Filter === "raw") return true;
+  if (step1Filter === "final") return row.dataset.final === "true";
+  if (step1Filter === "howto") return row.dataset.type !== "Non How-To";
+  return row.dataset.type === step1Filter;
+}
+function applyStep1Filters() {
+  const q = document.getElementById("step1Search")?.value.toLowerCase().trim() || "";
+  document.querySelectorAll(".step1-row").forEach(row => {
+    const show = step1Matches(row) && (!q || row.dataset.search.includes(q));
+    row.style.display = show ? "" : "none";
+  });
+}
+async function updateStep1Selection(rowIndex, checked, checkbox) {
+  const body = new URLSearchParams();
+  body.set("row_index", rowIndex);
+  body.set("include_final", checked ? "true" : "false");
+  const response = await fetch("/jobs/{{ job.id }}/selection", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!response.ok) {
+    alert("Could not update final selection. Reload and try again.");
+    return;
+  }
+  const step1Row = checkbox?.closest(".step1-row");
+  if (step1Row) step1Row.dataset.final = checked ? "true" : "false";
+  const tableRow = document.querySelector(`.result-row[data-index="${rowIndex}"]`);
+  if (tableRow) tableRow.dataset.final = checked ? "true" : "false";
+  applyStep1Filters();
+}
+window.setStep1Filter = setStep1Filter;
+window.applyStep1Filters = applyStep1Filters;
+window.updateStep1Selection = updateStep1Selection;
+function setTypeFilter(value, btn) {
+  typeFilter = value;
+  phaseFilter = "all";
+  document.querySelectorAll(".phase-card").forEach(c => c.classList.remove("active"));
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  btn.classList.add("active");
+  applyFilters();
+}
+function setPolicyFilter(value, btn) {
+  policyFilter = value;
+  phaseFilter = "all";
+  document.querySelectorAll(".phase-card").forEach(c => c.classList.remove("active"));
+  document.querySelectorAll(".policy-chip").forEach(c => c.classList.remove("active"));
+  btn.classList.add("active");
+  document.body.classList.toggle("show-risky-reasons", value === "RISKY");
+  applyFilters();
+}
+function showNeedsReview(btn) {
+  phaseFilter = "review";
+  policyFilter = "all";
+  document.querySelectorAll(".phase-card").forEach(c => c.classList.remove("active"));
+  document.querySelectorAll(".policy-chip").forEach(c => c.classList.remove("active"));
+  btn.classList.add("active");
+  document.body.classList.add("show-risky-reasons");
+  currentPage = 1;
+  applyFilters();
+}
+function showFailed() {
+  const errorButton = [...document.querySelectorAll(".policy-chip")].find(btn => btn.textContent.includes("Errors"));
+  if (errorButton) setPolicyFilter("ERROR", errorButton);
+}
+function selectedJobRows() {
+  return [...document.querySelectorAll(".job-row-check:checked")].map(box => box.value);
+}
+function toggleVisibleJobRows(checked) {
+  document.querySelectorAll(".result-row").forEach(row => {
+    if (row.style.display === "none") return;
+    const box = row.querySelector(".job-row-check");
+    if (box) box.checked = checked;
+  });
+}
+function syncBulkRows(form) {
+  const selected = selectedJobRows();
+  if (!selected.length) {
+    alert("Select one or more rows first.");
+    return false;
+  }
+  document.getElementById("selectedRowsInput").value = selected.join(",");
+  const submitter = document.activeElement;
+  if (submitter && submitter.value === "regenerate") return guardRunKey(form);
+  return true;
+}
+function guardRunKey(targetForm) {
+  const providerFieldName = providerKeyName === "GEMINI_API_KEY" ? "one_time_gemini_key" : "one_time_openai_key";
+  const typedKey = document.querySelector(`input[name="${providerFieldName}"]`)?.value.trim();
+  if (hasProviderKey || typedKey) {
+    if (typedKey && targetForm && targetForm.id !== "runForm") {
+      let hidden = targetForm.querySelector(`input[name="${providerFieldName}"]`);
+      if (!hidden) {
+        hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = providerFieldName;
+        targetForm.appendChild(hidden);
+      }
+      hidden.value = typedKey;
+    }
+    return true;
+  }
+  alert(`Add ${providerKeyName} in Settings before running Step 2 or regenerating rows.`);
+  openSettings();
+  return false;
+}
+function visibleJobMessage(message) {
+  if (!message) return "";
+  if (message.includes("OPENAI_API_KEY") || message.includes("GEMINI_API_KEY") || message.includes("one-time key")) return "";
+  return message;
+}
+function setPhaseFilter(value, btn) {
+  phaseFilter = value;
+  typeFilter = "all";
+  policyFilter = "all";
+  document.querySelectorAll(".phase-card").forEach(c => c.classList.remove("active"));
+  btn.classList.add("active");
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  document.querySelector('.chip[data-type="all"]')?.classList.add("active");
+  document.querySelectorAll(".policy-chip").forEach(c => c.classList.remove("active"));
+  document.querySelector(".policy-chip").classList.add("active");
+  document.body.classList.remove("show-risky-reasons");
+  applyFilters();
+}
+function typeMatches(row) {
+  if (typeFilter === "all") return true;
+  if (typeFilter === "final") return row.dataset.final === "true";
+  if (typeFilter === "howto") return row.dataset.type !== "Non How-To";
+  return row.dataset.type === typeFilter;
+}
+function policyMatches(row) {
+  return policyFilter === "all" || row.dataset.policy === policyFilter;
+}
+function phaseMatches(row) {
+  if (phaseFilter === "all" || phaseFilter === "deduped") return true;
+  if (phaseFilter === "final") return row.dataset.final === "true";
+  if (phaseFilter === "extracted") return row.dataset.final === "true" && row.dataset.extracted === "true";
+  if (phaseFilter === "policy") return row.dataset.final === "true" && ["SAFE", "RISKY", "PROHIBITED"].includes(row.dataset.policy);
+  if (phaseFilter === "safe") return row.dataset.final === "true" && row.dataset.decision === "DO";
+  if (phaseFilter === "review") return row.dataset.final === "true" && ["PENDING", "RISKY", "PROHIBITED", "ERROR"].includes(row.dataset.policy);
+  if (phaseFilter === "removed") return row.dataset.final === "true" && row.dataset.policy === "PROHIBITED";
+  return true;
+}
+function applyFilters() {
+  const search = document.getElementById("searchBox");
+  const q = search ? search.value.toLowerCase().trim() : "";
+  filteredRows = [];
+  document.querySelectorAll(".result-row").forEach(row => {
+    const ok = phaseMatches(row) && typeMatches(row) && policyMatches(row) && (!q || row.dataset.search.includes(q));
+    if (ok) filteredRows.push(row);
+  });
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  document.querySelectorAll(".result-row").forEach(row => row.style.display = "none");
+  filteredRows.slice(start, end).forEach(row => row.style.display = "");
+  document.getElementById("visibleCount").textContent = filteredRows.length;
+  document.getElementById("pageNumber").textContent = currentPage;
+  document.getElementById("pageTotal").textContent = totalPages;
+}
+function nextPage() {
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  if (currentPage < totalPages) {
+    currentPage += 1;
+    applyFilters();
+  }
+}
+function prevPage() {
+  if (currentPage > 1) {
+    currentPage -= 1;
+    applyFilters();
+  }
+}
+function changePageSize(value) {
+  pageSize = parseInt(value, 10);
+  currentPage = 1;
+  applyFilters();
+}
+function setupColumnControls() {
+  const header = document.getElementById("resultHeader");
+  if (!header) return;
+  header.querySelectorAll("th").forEach(th => {
+    if (th.dataset.column !== "num") {
+      th.addEventListener("dragstart", event => {
+        draggingColumn = th.dataset.column;
+        event.dataTransfer.effectAllowed = "move";
+      });
+      th.addEventListener("dragover", event => {
+        event.preventDefault();
+        th.classList.add("drag-over");
+      });
+      th.addEventListener("dragleave", () => th.classList.remove("drag-over"));
+      th.addEventListener("drop", event => {
+        event.preventDefault();
+        th.classList.remove("drag-over");
+        moveResultColumn(draggingColumn, th.dataset.column);
+      });
+    }
+  });
+  header.querySelectorAll(".resize-handle").forEach(handle => {
+    handle.addEventListener("mousedown", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const th = handle.closest("th");
+      resizingColumn = {
+        key: handle.dataset.column,
+        startX: event.clientX,
+        startWidth: th.getBoundingClientRect().width,
+      };
+      document.addEventListener("mousemove", resizeResultColumn);
+      document.addEventListener("mouseup", stopResizeResultColumn);
+    });
+  });
+}
+function openResultColumnMenu(event, key) {
+  event.stopPropagation();
+  showResultColumnMenu(event.currentTarget, key);
+}
+function showResultColumnMenu(anchor, key) {
+  document.querySelectorAll(".column-menu").forEach(menu => menu.remove());
+  const menu = document.createElement("div");
+  menu.className = "column-menu";
+  menu.innerHTML = `
+    <button type="button" data-action="asc">↑ Sort ascending</button>
+    <button type="button" data-action="desc">↓ Sort descending</button>
+    <button type="button" data-action="size">↔ Autosize</button>
+    <button type="button" data-action="hide">⌧ Hide column</button>
+  `;
+  document.body.appendChild(menu);
+  const rect = anchor.getBoundingClientRect();
+  menu.style.left = `${Math.min(rect.left, window.innerWidth - 190)}px`;
+  menu.style.top = `${rect.bottom + 6}px`;
+  menu.addEventListener("click", event => {
+    const action = event.target.dataset.action;
+    if (action === "asc") sortResultColumn(key, "asc");
+    if (action === "desc") sortResultColumn(key, "desc");
+    if (action === "size") autosizeResultColumn(key);
+    if (action === "hide") hideResultColumn(key);
+    menu.remove();
+  });
+  setTimeout(() => document.addEventListener("click", () => menu.remove(), { once: true }), 0);
+}
+function sortResultColumn(key, direction) {
+  const tbody = document.querySelector(".banker-table tbody");
+  const rows = [...document.querySelectorAll(".result-row")];
+  rows.sort((a, b) => {
+    const av = a.querySelector(`.col-${key}`)?.textContent.trim() || "";
+    const bv = b.querySelector(`.col-${key}`)?.textContent.trim() || "";
+    const result = av.localeCompare(bv, undefined, { numeric: true });
+    return direction === "desc" ? -result : result;
+  });
+  rows.forEach(row => tbody.appendChild(row));
+  applyFilters();
+}
+function autosizeResultColumn(key) {
+  const width = key === "title" ? 520 : key === "extraction" ? 360 : 180;
+  document.querySelectorAll(`.banker-table .col-${key}`).forEach(cell => {
+    cell.style.width = `${width}px`;
+    cell.style.minWidth = `${width}px`;
+  });
+}
+function hideResultColumn(key) {
+  if (["select", "num", "title"].includes(key)) return;
+  document.querySelectorAll(`.banker-table .col-${key}`).forEach(cell => {
+    cell.style.display = "none";
+  });
+}
+function moveResultColumn(fromKey, toKey) {
+  if (!fromKey || !toKey || fromKey === toKey || fromKey === "num" || toKey === "num") return;
+  const table = document.querySelector(".banker-table");
+  const headerCells = [...document.querySelectorAll("#resultHeader th")];
+  const fromIndex = headerCells.findIndex(cell => cell.dataset.column === fromKey);
+  const toIndex = headerCells.findIndex(cell => cell.dataset.column === toKey);
+  if (fromIndex < 0 || toIndex < 0) return;
+  [...table.rows].forEach(row => {
+    const cells = row.children;
+    const moving = cells[fromIndex];
+    const target = cells[toIndex];
+    if (!moving || !target) return;
+    row.insertBefore(moving, fromIndex < toIndex ? target.nextSibling : target);
+  });
+}
+function resizeResultColumn(event) {
+  if (!resizingColumn) return;
+  const width = Math.max(52, resizingColumn.startWidth + event.clientX - resizingColumn.startX);
+  columnWidths[resizingColumn.key] = width;
+  document.querySelectorAll(`.banker-table .col-${resizingColumn.key}`).forEach(cell => {
+    cell.style.width = `${width}px`;
+    cell.style.minWidth = `${width}px`;
+  });
+}
+function stopResizeResultColumn() {
+  resizingColumn = null;
+  document.removeEventListener("mousemove", resizeResultColumn);
+  document.removeEventListener("mouseup", stopResizeResultColumn);
+}
+const runningStates = new Set(["QUEUED", "RUNNING"]);
+function setTextIfPresent(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.textContent = value;
+}
+async function pollStatus() {
+  try {
+    const res = await fetch(`${appBaseUrl}/jobs/{{ job.id }}/status`);
+    const data = await res.json();
+    setTextIfPresent("stateLabel", data.state);
+    setTextIfPresent("processedCount", data.processed);
+    const progressBar = document.getElementById("progressBar");
+    if (progressBar) progressBar.style.width = data.progress_pct + "%";
+    setTextIfPresent("jobMessage", visibleJobMessage(data.message || ""));
+    updateValidationBox(data.export_blockers, data.ready_count);
+    updateRunLog(data.logs || []);
+    if (runningStates.has(data.state)) {
+      setTimeout(pollStatus, 2500);
+    } else if (data.processed > {{ job.processed }}) {
+      maybeAutoExport(data);
+      window.location.reload();
+    }
+  } catch (err) {
+    setTimeout(pollStatus, 5000);
+  }
+}
+async function validateExport() {
+  const res = await fetch(`${appBaseUrl}/jobs/{{ job.id }}/validate`);
+  const data = await res.json();
+  updateValidationBox(data.blockers, data.ready_count);
+}
+function updateValidationBox(blockers, readyCount) {
+  const box = document.getElementById("validationBox");
+  if (!box) return;
+  if (blockers && blockers.length) {
+    box.className = "validation-box warn";
+    box.textContent = "Final export blocked: " + blockers.join(" ");
+  } else {
+    box.className = "validation-box ok";
+    box.textContent = `Final export ready. ${readyCount} SAFE / DO titles available.`;
+  }
+}
+function updateRunLog(logs) {
+  const list = document.getElementById("runLog");
+  if (!list) return;
+  list.innerHTML = logs.map(item => `<li>${item}</li>`).join("");
+}
+function maybeAutoExport(data) {
+  const autoExport = {{ 'true' if job.auto_export else 'false' }};
+  const key = "auto-exported-{{ job.id }}";
+  if (!autoExport || localStorage.getItem(key) || data.pending_count > 0 || data.failed > 0 || data.ready_count < 1) return;
+  localStorage.setItem(key, "yes");
+  window.location.href = "/jobs/{{ job.id }}/download?kind=ready";
+}
+function scrollWorkflowTarget(id) {
+  const target = document.getElementById(id);
+  if (!target) return true;
+  setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  target.classList.add("workflow-focus");
+  setTimeout(() => target.classList.remove("workflow-focus"), 1400);
+  return true;
+}
+if (window.location.hash) {
+  const target = document.getElementById(window.location.hash.slice(1));
+  if (target) setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+}
+{% if job.state in ['QUEUED','RUNNING'] %}
+setTimeout(pollStatus, 1500);
+{% endif %}
+setupColumnControls();
+applyStep1Filters();
+applyFilters();
+validateExport();
+</script>
+
+{% endblock %}
