@@ -12,7 +12,7 @@ import httpx
 
 from app.pipeline.defaults import CLEANING_INSTRUCTIONS
 from app.store.jobs import Job, TitleRow, append_log, load_job, refresh_counts, save_job
-from app.store.settings import get_gemini_key, get_openai_key
+from app.store.settings import get_gemini_key, get_openai_key, save_setting
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -121,6 +121,8 @@ async def process_job(
                         job.rows[idx] = by_index[row.index]
                 append_log(job, f"Processed rows {min(batch_ids)}-{max(batch_ids)}.")
             except ProviderAuthError as exc:
+                if saved_key and key == saved_key:
+                    save_setting("gemini_key" if provider == "gemini" else "openai_key", "")
                 job.state = "FAILED"
                 job.message = str(exc)
                 append_log(job, job.message)

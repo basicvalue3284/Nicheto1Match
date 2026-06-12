@@ -37,10 +37,11 @@
       </div>
       <div class="header-actions">
         {% set ai_key_available = has_gemini_key if job.provider == 'gemini' else has_server_key %}
-        {% set ai_key_rejected = 'API key was rejected' in job.message %}
-        <span class="api-status-pill {% if ai_key_available and not ai_key_rejected %}ok{% else %}bad{% endif %}" title="{% if ai_key_rejected %}{{ job.provider|upper }} API key was rejected. Add a valid key in Settings.{% elif ai_key_available %}{{ job.provider|upper }} API key is saved and available for Step 2.{% else %}Add {{ job.provider|upper }} API key in Settings before Step 2 can run.{% endif %}">
+        {% set ai_key_rejected = ai_key_available and ('API key was rejected' in job.message) %}
+        {% set ai_key_usable = ai_key_available and not ai_key_rejected %}
+        <span class="api-status-pill {% if ai_key_usable %}ok{% else %}bad{% endif %}" title="{% if ai_key_rejected %}{{ job.provider|upper }} API key was rejected. Add a valid key in Settings.{% elif ai_key_available %}{{ job.provider|upper }} API key is saved and available for Step 2.{% else %}Add {{ job.provider|upper }} API key in Settings before Step 2 can run.{% endif %}">
           <span></span>
-          {{ job.provider|upper }} API{% if ai_key_rejected %} rejected{% endif %}
+          {% if ai_key_rejected %}{{ job.provider|upper }} API rejected{% elif ai_key_available %}{{ job.provider|upper }} API{% else %}Add {{ job.provider|upper }} key{% endif %}
         </span>
         <button type="button" class="ghost-link icon-back-link" onclick="history.back()" title="Back to Tools & Filter" aria-label="Back to Tools & Filter">←</button>
         <button type="button" class="icon-btn" onclick="openSettings()">⚙️</button>
@@ -169,7 +170,7 @@
       <div class="control-line">
         <div class="run-actions">
           <form id="automationForm" action="/jobs/{{ job.id }}/automation" method="post" class="run-form" onsubmit="return guardRunKey(this)">
-            <button class="primary-btn automation-btn" type="submit">Run Full Automation</button>
+            <button class="primary-btn automation-btn" type="submit">Run Step 2 : Title Extract</button>
             <label class="threshold-control">Continue at
               <input type="number" name="threshold_pct" value="95" min="50" max="100" step="1">%
             </label>
@@ -219,7 +220,8 @@
         <summary>Advanced filter</summary>
         <div class="advanced-grid">
           <form action="/jobs/{{ job.id }}/run" method="post" onsubmit="return guardRunKey(this)">
-            <button class="mini-btn" type="submit" name="run_mode" value="test_25">Test 25</button>
+            <input type="hidden" name="run_mode" value="test_25">
+            <button class="mini-btn" type="submit">Test 25</button>
           </form>
           <form action="/jobs/{{ job.id }}/run" method="post" onsubmit="return guardRunKey(this)">
             <button class="mini-btn" type="submit" name="run_mode" value="retry_pending">Retry Pending</button>
@@ -1113,8 +1115,9 @@ let filteredRows = [];
 let draggingColumn = "";
 let resizingColumn = null;
 const columnWidths = {};
-const hasProviderKey = {{ 'true' if (job.provider == 'gemini' and has_gemini_key) or (job.provider != 'gemini' and has_server_key) else 'false' }};
+const hasProviderKey = {{ 'true' if ai_key_usable else 'false' }};
 const providerKeyName = "{{ 'GEMINI_API_KEY' if job.provider == 'gemini' else 'OPENAI_API_KEY' }}";
+const providerKeyRejected = {{ 'true' if ai_key_rejected else 'false' }};
 const appBaseUrl = `${window.location.protocol}//${window.location.host}`;
 
 function openSettings() {
@@ -1232,7 +1235,10 @@ function guardRunKey(targetForm) {
     }
     return true;
   }
-  alert(`Add ${providerKeyName} in Settings before running Step 2 or regenerating rows.`);
+  const message = providerKeyRejected
+    ? `${providerKeyName} was rejected. Add a fresh valid key in Settings before running Step 2.`
+    : `Add ${providerKeyName} in Settings before running Step 2 or regenerating rows.`;
+  alert(message);
   openSettings();
   return false;
 }
