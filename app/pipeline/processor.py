@@ -387,7 +387,7 @@ def _apply_result(row: TitleRow, item: dict[str, Any]) -> None:
         removed = [removed] if removed else []
     if not isinstance(removed, list):
         removed = []
-    cleaned, deterministic_removed = _normalize_extracted_title(raw_cleaned)
+    cleaned, deterministic_removed = _strict_rule_extract_title(raw_cleaned)
     removed_values = [str(value) for value in removed if str(value).strip()]
     for value in deterministic_removed:
         if value not in removed_values:
@@ -439,10 +439,17 @@ def _strict_rule_extract_title(title: str) -> tuple[str, list[str]]:
             removed.append(prefix)
         cleaned = cleaned[how_match.start():].strip()
 
-    # Prefer an existing "How to" segment after a separator when the first segment is a label.
+    # Prefer a complete how-to segment and cut trailing tutorial/search noise.
     for sep in ("||", "|", " - ", " – ", " — ", ": "):
         if sep in cleaned:
             parts = [part.strip() for part in cleaned.split(sep) if part.strip()]
+            if parts:
+                first = parts[0]
+                trailing = parts[1:]
+                if trailing and re.search(r"\bhow\s+to\b", first, flags=re.IGNORECASE):
+                    removed.extend(trailing)
+                    cleaned = first
+                    break
             how_parts = [part for part in parts if re.search(r"\bhow\s+to\b", part, flags=re.IGNORECASE)]
             if how_parts and not re.search(r"\bhow\s+to\b", parts[0], flags=re.IGNORECASE):
                 chosen = how_parts[0]
@@ -450,18 +457,19 @@ def _strict_rule_extract_title(title: str) -> tuple[str, list[str]]:
                 cleaned = chosen
                 break
             if parts:
-                first = parts[0]
-                trailing = parts[1:]
                 if trailing and _looks_like_noise(" ".join(trailing)):
                     removed.extend(trailing)
                     cleaned = first
                     break
 
     noise_patterns = [
+        r"\([^)]*\b(?:free|full|guide|tutorial|updated|latest|step[- ]?by[- ]?step)\b[^)]*\)",
+        r"\[[^\]]*\b(?:free|full|guide|tutorial|updated|latest|step[- ]?by[- ]?step)\b[^\]]*\]",
         r"\(\s*20\d{2}\s*\)",
         r"\b20\d{2}\b",
         r"\[(?:live proof|updated|full guide|guide|tutorial|beginner(?:s)?|latest|easy)\]",
         r"\((?:full[- ]?guide|guide|tutorial|beginner(?:s)?|updated|latest|quick\s*&\s*easy|quick and easy|step[- ]?by[- ]?step|full review|easy)\)",
+        r"\b(?:help videos?|tutorial|training|full[- ]?guide|complete guide)\b\s*$",
         r"\b(?:full[- ]?guide|quick guide|quick\s*&\s*easy|quick and easy|step[- ]?by[- ]?step tutorial|step[- ]?by[- ]?step|for free|free|updated|latest)\b",
     ]
     for pattern in noise_patterns:
@@ -470,6 +478,17 @@ def _strict_rule_extract_title(title: str) -> tuple[str, list[str]]:
             removed.extend(matches)
             cleaned = re.sub(pattern, " ", cleaned, flags=re.IGNORECASE)
 
+    cleaned = re.sub(r"\(\s*\)|\[\s*\]", " ", cleaned)
+    if cleaned.count("(") > cleaned.count(")"):
+        fragment = cleaned[cleaned.rfind("("):].strip()
+        if fragment:
+            removed.append(fragment)
+        cleaned = cleaned[: cleaned.rfind("(")].strip()
+    if cleaned.count("[") > cleaned.count("]"):
+        fragment = cleaned[cleaned.rfind("["):].strip()
+        if fragment:
+            removed.append(fragment)
+        cleaned = cleaned[: cleaned.rfind("[")].strip()
     cleaned = re.sub(r"\s+", " ", cleaned)
     if re.search(r"\b(?:in|for|with|on|at|by)\s+20\d{2}\b", title, flags=re.IGNORECASE):
         cleaned = re.sub(r"\b(?:in|for|with|on|at|by)\s*$", "", cleaned, flags=re.IGNORECASE)
