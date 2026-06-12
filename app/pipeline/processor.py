@@ -20,6 +20,10 @@ RETRYABLE_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
 MAX_API_ATTEMPTS = 5
 
 
+class ProviderAuthError(RuntimeError):
+    """Raised when a provider key is present but rejected by the API."""
+
+
 def parse_extra_cleaning_examples(raw: str) -> list[dict[str, str]]:
     """Parse user-added examples from textarea lines.
 
@@ -116,6 +120,12 @@ async def process_job(
                     if row.index in by_index:
                         job.rows[idx] = by_index[row.index]
                 append_log(job, f"Processed rows {min(batch_ids)}-{max(batch_ids)}.")
+            except ProviderAuthError as exc:
+                job.state = "FAILED"
+                job.message = str(exc)
+                append_log(job, job.message)
+                save_job(job)
+                return
             except Exception as exc:
                 for row in job.rows:
                     if row.index in batch_ids:
@@ -308,6 +318,8 @@ async def _call_openai(client: httpx.AsyncClient, api_key: str, model: str, prom
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         json=payload,
     )
+    if response.status_code in {401, 403}:
+        raise ProviderAuthError("OpenAI API key was rejected. Add a valid key in Settings, then run Step 2 again.")
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
@@ -337,6 +349,8 @@ async def _call_gemini(client: httpx.AsyncClient, api_key: str, model: str, prom
         headers={"Content-Type": "application/json"},
         json=payload,
     )
+    if response.status_code in {401, 403}:
+        raise ProviderAuthError("Gemini API key was rejected. Add a valid key in Settings, then run Step 2 again.")
     response.raise_for_status()
     data = response.json()
     return data["candidates"][0]["content"]["parts"][0]["text"]

@@ -37,9 +37,10 @@
       </div>
       <div class="header-actions">
         {% set ai_key_available = has_gemini_key if job.provider == 'gemini' else has_server_key %}
-        <span class="api-status-pill {% if ai_key_available %}ok{% else %}bad{% endif %}" title="{% if ai_key_available %}{{ job.provider|upper }} API key is saved and available for Step 2.{% else %}Add {{ job.provider|upper }} API key in Settings before Step 2 can run.{% endif %}">
+        {% set ai_key_rejected = 'API key was rejected' in job.message %}
+        <span class="api-status-pill {% if ai_key_available and not ai_key_rejected %}ok{% else %}bad{% endif %}" title="{% if ai_key_rejected %}{{ job.provider|upper }} API key was rejected. Add a valid key in Settings.{% elif ai_key_available %}{{ job.provider|upper }} API key is saved and available for Step 2.{% else %}Add {{ job.provider|upper }} API key in Settings before Step 2 can run.{% endif %}">
           <span></span>
-          {{ job.provider|upper }} API
+          {{ job.provider|upper }} API{% if ai_key_rejected %} rejected{% endif %}
         </span>
         <button type="button" class="ghost-link icon-back-link" onclick="history.back()" title="Back to Tools & Filter" aria-label="Back to Tools & Filter">←</button>
         <button type="button" class="icon-btn" onclick="openSettings()">⚙️</button>
