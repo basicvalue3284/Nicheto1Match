@@ -356,16 +356,43 @@ def export_scrape(job: ScrapeJob, output_dir: Path) -> None:
         if row.match_count == 1 and row.matched_result and row.input_title not in seen:
             seen.add(row.input_title)
             one_match.append(row)
+    one_match = sorted(one_match, key=status_sort_key)
     write_single_column_csv(output_dir / "Final 1 Match_Titles.csv", "Title", [row.input_title for row in one_match])
 
     details = Workbook()
     ws = details.active
     ws.title = "Final 1 Match with Stats"
-    ws.append(["Title", "Subs", "Match Count", "Status Tagging", "Channel ID", "Result Title"])
+    ws.append(["Title", "Views", "Subs", "Match Count", "Status Tagging", "Channel ID", "Result Title"])
     for row in one_match:
-        ws.append([row.input_title, row.subs, row.match_count, row.status_tagging, row.channel_id, row.result_title])
+        ws.append([row.input_title, row.views, row.subs, row.match_count, row.status_tagging, row.channel_id, row.result_title])
     autosize(ws)
     details.save(output_dir / "Final 1 Match with Stats.xlsx")
+
+
+def status_sort_key(row: object) -> tuple[int, int, str]:
+    status = str(row.status_tagging or "").lower()
+    if "<5k" in status:
+        bucket = 0
+    elif "5k-10k" in status or "5k to 10k" in status:
+        bucket = 1
+    elif "10k-25k" in status or "10k to 25k" in status:
+        bucket = 2
+    elif "25k+" in status:
+        bucket = 3
+    else:
+        bucket = 9
+    return bucket, parse_subscriber_value(row.subs), str(row.input_title).lower()
+
+
+def parse_subscriber_value(value: str) -> int:
+    text = str(value or "").strip().lower().replace(",", "")
+    match = re.search(r"(\d+(?:\.\d+)?)\s*([kmb])?", text)
+    if not match:
+        return 10**12
+    number = float(match.group(1))
+    suffix = match.group(2)
+    multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(suffix, 1)
+    return int(number * multiplier)
 
 
 def export_final_master(phase1: Job, scrape: ScrapeJob | None, output_dir: Path) -> None:
