@@ -5,7 +5,7 @@ This folder runs the NicheTo1Match workflow from your computer without using the
 ## Folders
 
 ```text
-pc_batch_runner/
+Nicheto1Match_AutoRUN/
   input_titles/      Drop Excel/CSV/TXT title files here
   output_results/    Batch results and ZIP files are written here
   run_batch.py       Runner script
@@ -47,25 +47,25 @@ GEMINI_MODEL=gemini-1.5-flash
 From the project root:
 
 ```bash
-.venv312/bin/python pc_batch_runner/run_batch.py
+.venv312/bin/python Nicheto1Match_AutoRUN/run_batch.py
 ```
 
 Test only Step 1 + Step 2 without RapidAPI:
 
 ```bash
-.venv312/bin/python pc_batch_runner/run_batch.py --skip-step3
+.venv312/bin/python Nicheto1Match_AutoRUN/run_batch.py --skip-step3
 ```
 
 Validate file reading and Step 1 exports without any API calls:
 
 ```bash
-.venv312/bin/python pc_batch_runner/run_batch.py --dry-run-step1
+.venv312/bin/python Nicheto1Match_AutoRUN/run_batch.py --dry-run-step1
 ```
 
 Use a custom folder:
 
 ```bash
-.venv312/bin/python pc_batch_runner/run_batch.py --input-dir /path/to/files --output-dir /path/to/results
+.venv312/bin/python Nicheto1Match_AutoRUN/run_batch.py --input-dir /path/to/files --output-dir /path/to/results
 ```
 
 ## Outputs Per File

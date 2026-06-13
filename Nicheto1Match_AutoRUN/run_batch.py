@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-os.environ.setdefault("DATA_ROOT", str(ROOT / "pc_batch_runner" / ".batch_data"))
+os.environ.setdefault("DATA_ROOT", str(ROOT / "Nicheto1Match_AutoRUN" / ".batch_data"))
 load_dotenv(ROOT / ".env")
 
 from openpyxl import Workbook
@@ -38,8 +38,8 @@ from app.store.jobs import Job, append_log, load_job, make_rows, refresh_counts,
 from app.store.scrapes import ScrapeJob, append_scrape_log, load_scrape_job, save_scrape_job
 
 SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv", ".tsv", ".txt"}
-DEFAULT_INPUT_DIR = ROOT / "pc_batch_runner" / "input_titles"
-DEFAULT_OUTPUT_DIR = ROOT / "pc_batch_runner" / "output_results"
+DEFAULT_INPUT_DIR = ROOT / "Nicheto1Match_AutoRUN" / "input_titles"
+DEFAULT_OUTPUT_DIR = ROOT / "Nicheto1Match_AutoRUN" / "output_results"
 
 
 def main() -> None:
