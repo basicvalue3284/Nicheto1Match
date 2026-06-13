@@ -174,6 +174,7 @@ async def process_file(path: Path, run_dir: Path, args: argparse.Namespace) -> d
     print(f"  Step 1: {job.raw_count} uploaded, {job.final_count} final-list titles.")
     if args.dry_run_step1:
         export_phase1(job, output_dir)
+        export_final_master(job, None, output_dir)
         summary = {
             "file": path.name,
             "status": "DRY_RUN_STEP1",
@@ -218,6 +219,7 @@ async def process_file(path: Path, run_dir: Path, args: argparse.Namespace) -> d
         export_scrape(scrape, output_dir)
     elif not safe_titles:
         (output_dir / "step3_skipped.txt").write_text("Step 3 skipped: zero SAFE titles from Step 2.", encoding="utf-8")
+    export_final_master(job, scrape, output_dir)
 
     summary = {
         "file": path.name,
@@ -338,7 +340,64 @@ def phase1_row(row: object, idx: int) -> list[str]:
 
 
 def export_scrape(job: ScrapeJob, output_dir: Path) -> None:
-    headers = [
+    headers = scrape_headers()
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "Step 3 Master"
+    ws.append(headers)
+    for row in job.results:
+        ws.append(scrape_row(row))
+    autosize(ws)
+    workbook.save(output_dir / "step3_master.xlsx")
+
+    one_match = []
+    seen = set()
+    for row in job.results:
+        if row.match_count == 1 and row.matched_result and row.input_title not in seen:
+            seen.add(row.input_title)
+            one_match.append(row)
+    write_single_column_csv(output_dir / "Final 1 Match_Titles.csv", "Title", [row.input_title for row in one_match])
+
+    details = Workbook()
+    ws = details.active
+    ws.title = "Final 1 Match with Stats"
+    ws.append(["Title", "Subs", "Match Count", "Status Tagging", "Channel ID", "Result Title"])
+    for row in one_match:
+        ws.append([row.input_title, row.subs, row.match_count, row.status_tagging, row.channel_id, row.result_title])
+    autosize(ws)
+    details.save(output_dir / "Final 1 Match with Stats.xlsx")
+
+
+def export_final_master(phase1: Job, scrape: ScrapeJob | None, output_dir: Path) -> None:
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+
+    ws = workbook.create_sheet("Step 1")
+    ws.append(["#", "Title", "Tag", "Final List"])
+    for idx, row in enumerate(phase1.rows, start=1):
+        ws.append([idx, row.original_title, row.type, "YES" if row.include_final else ""])
+    autosize(ws)
+
+    ws = workbook.create_sheet("Step 2 Title Extractor")
+    ws.append(["#", "Original Title", "Title Extraction", "Removed Text", "Tag", "Policy", "Reason Notes", "Confidence", "Error"])
+    for idx, row in enumerate([row for row in phase1.rows if row.include_final], start=1):
+        ws.append(phase1_row(row, idx))
+    autosize(ws)
+
+    ws = workbook.create_sheet("Step 3")
+    ws.append(scrape_headers())
+    if scrape:
+        for row in scrape.results:
+            ws.append(scrape_row(row))
+    else:
+        ws.append(["Step 3 not run yet", "", "", "", "", "", "", "", "", "", ""])
+    autosize(ws)
+
+    workbook.save(output_dir / "Final_Master.xlsx")
+
+
+def scrape_headers() -> list[str]:
+    return [
         "Input Title",
         "Result Title",
         "Result Views",
@@ -351,43 +410,22 @@ def export_scrape(job: ScrapeJob, output_dir: Path) -> None:
         "Matched Result",
         "Error",
     ]
-    workbook = Workbook()
-    ws = workbook.active
-    ws.title = "Step 3 Master"
-    ws.append(headers)
-    for row in job.results:
-        ws.append([
-            row.input_title,
-            row.result_title,
-            row.views,
-            row.channel_id,
-            row.channel_title,
-            row.subs,
-            row.search_position,
-            row.match_count,
-            row.status_tagging,
-            "YES" if row.matched_result else "",
-            row.error,
-        ])
-    autosize(ws)
-    workbook.save(output_dir / "step3_master.xlsx")
 
-    one_match = []
-    seen = set()
-    for row in job.results:
-        if row.match_count == 1 and row.matched_result and row.input_title not in seen:
-            seen.add(row.input_title)
-            one_match.append(row)
-    write_single_column_csv(output_dir / "one_match_titles.csv", "Title", [row.input_title for row in one_match])
 
-    details = Workbook()
-    ws = details.active
-    ws.title = "One Match Details"
-    ws.append(["Title", "Subs", "Match Count", "Status Tagging", "Channel ID", "Result Title"])
-    for row in one_match:
-        ws.append([row.input_title, row.subs, row.match_count, row.status_tagging, row.channel_id, row.result_title])
-    autosize(ws)
-    details.save(output_dir / "one_match_details.xlsx")
+def scrape_row(row: object) -> list[str | int]:
+    return [
+        row.input_title,
+        row.result_title,
+        row.views,
+        row.channel_id,
+        row.channel_title,
+        row.subs,
+        row.search_position,
+        row.match_count,
+        row.status_tagging,
+        "YES" if row.matched_result else "",
+        row.error,
+    ]
 
 
 def write_single_column_csv(path: Path, header: str, values: list[str]) -> None:

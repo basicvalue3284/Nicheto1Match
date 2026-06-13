@@ -75,8 +75,9 @@ phase1_master.xlsx
 review_rows.xlsx
 safe_titles.csv
 step3_master.xlsx
-one_match_titles.csv
-one_match_details.xlsx
+Final_Master.xlsx
+Final 1 Match_Titles.csv
+Final 1 Match with Stats.xlsx
 summary.json
 ```
 
