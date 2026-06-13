@@ -1,0 +1,5 @@
+.batch_data/
+input_titles/*
+!input_titles/.gitkeep
+output_results/*
+!output_results/.gitkeep
